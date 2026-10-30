@@ -15,3 +15,4 @@ Single-file interactive 3D Isometric Tropical Island Diorama built with **Three.
 ## Run Locally
 
 Open `index.html` directly in any modern WebGL-capable browser (Chrome, Edge, Firefox, Safari), or serve the folder via any static HTTP server / GitHub Pages.
+

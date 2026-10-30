@@ -510,7 +510,6 @@
       // Danh sách cập nhật animation
       var oceanData = null;
       var foamBands = [];
-      var glintRibbons = [];
       var swayingPalms = [];
       var swayingBushes = [];
       var clouds = [];
@@ -550,7 +549,6 @@
       var celestialSunState = {
         worldPos: new THREE.Vector3(-24, 14, -24),
         visibility: 1.0,
-        rayVisibility: 1.0,
         sunsetFactor: 0.0,
         rainFactor: 0.0,
         stormFactor: 0.0,
@@ -559,11 +557,7 @@
         sunLat: -6.2,
         horizonYCam: 9.83,
         skyBackdrop: null,
-        skyMat: null,
-        sunBillboard: null,
-        sunMat: null,
-        godRaysMesh: null,
-        godRaysMat: null
+        skyMat: null
       };
       var oceanSunUniforms = {
         uTime: { value: 0 },
@@ -576,11 +570,8 @@
         uLightningPulse: { value: 0.0 },
         uSunCoreColor: { value: new THREE.Color(0xfffef2) },
         uSunRoadColor: { value: new THREE.Color(0xffd875) },
-        uSunGlowColor: { value: new THREE.Color(0xffe7a3) }
+        uWaterRippleStrength: { value: 1.0 }
       };
-      var sunPathSparkleInst = null;
-      var sunPathSparkleMat = null;
-      var sunPathSparkles = [];
       var movingBoats = [];
       var boatWakeInst = null;
       var boatWakeList = [];
@@ -781,20 +772,20 @@
           fogFar: 240,
           abyssHex: 0x07223b,
           oceanTintHex: 0xffffff,
-          exposure: 1.08,
-          hemiSkyHex: 0xfff5e0,
-          hemiGroundHex: 0x194d6e,
+          exposure: 1.0,
+          hemiSkyHex: 0xd9e9f3,
+          hemiGroundHex: 0x324d5b,
           hemiIntensity: 0.72,
           ambientHex: 0xd8ecff,
           ambientIntensity: 0.26,
-          sunHex: 0xfff1cf,
-          sunIntensity: 1.35,
+          sunHex: 0xfff4e5,
+          sunIntensity: 1.18,
           sunPos: [-28, 40, 24],
           bounceHex: 0x36e8d8,
-          bounceIntensity: 0.38,
+          bounceIntensity: 0.16,
           cloudColorHex: 0xffffff,
           cloudEmissiveHex: 0x283e54,
-          cloudEmissiveIntensity: 0.22,
+          cloudEmissiveIntensity: 0.08,
           cloudScale: 1.0,
           cloudSpeed: 1.0,
           glintNearHex: 0xb8fff9,
@@ -819,26 +810,26 @@
           fogNear: 86,
           fogFar: 225,
           abyssHex: 0x1a284d,
-          oceanTintHex: 0xffd8c2,
-          exposure: 1.06,
-          hemiSkyHex: 0xffae70,
-          hemiGroundHex: 0x2a1c3d,
-          hemiIntensity: 0.64,
-          ambientHex: 0xffb38a,
-          ambientIntensity: 0.22,
-          sunHex: 0xff8c42,
-          sunIntensity: 1.52,
-          sunPos: [-38, 15.5, 28],
-          bounceHex: 0xff7b54,
-          bounceIntensity: 0.34,
-          cloudColorHex: 0xffcfb3,
+          oceanTintHex: 0x91c8d5,
+          exposure: 0.94,
+          hemiSkyHex: 0xc58c76,
+          hemiGroundHex: 0x38283f,
+          hemiIntensity: 0.52,
+          ambientHex: 0xb9a0b4,
+          ambientIntensity: 0.18,
+          sunHex: 0xffa15a,
+          sunIntensity: 1.48,
+          sunPos: [-38, 13.0, 28],
+          bounceHex: 0xd78a65,
+          bounceIntensity: 0.14,
+          cloudColorHex: 0xf3b18b,
           cloudEmissiveHex: 0x8c3b4a,
-          cloudEmissiveIntensity: 0.38,
+          cloudEmissiveIntensity: 0.06,
           cloudScale: 1.04,
           cloudSpeed: 0.85,
           glintNearHex: 0xffcf87,
           glintFarHex: 0xff9466,
-          glintOpacityMul: 1.25,
+          glintOpacityMul: 0.8,
           lanternEmissiveIntensity: 2.2,
           lanternLightIntensity: 1.45,
           waveAmp: 0.92,
@@ -1122,32 +1113,31 @@
       }
 
       // Hàm tính độ cao sóng biển tại vị trí (x, z) theo thời gian t (kết hợp sóng ven bờ & sóng đại dương xa)
+      function getOceanWaveDisplacement(x, z, t, nearWeight, swellWeight) {
+        // Crossing wave packets keep crests short instead of spanning the ocean.
+        var cross = Math.sin(x * 0.31 - z * 0.43 + t * 0.72);
+        var packet = 0.55 + 0.45 * Math.sin(x * 0.19 - z * 0.27 - t * 0.86);
+        var ripples =
+          Math.sin(x * 0.72 + z * 0.48 - t * 2.15 + cross * 0.70) * 0.105 +
+          Math.sin(-x * 0.58 + z * 0.91 - t * 2.65 + 0.9) * 0.055 +
+          Math.sin(x * 1.21 + z * 0.36 - t * 3.10 + 1.7) * 0.025;
+        var swell =
+          Math.sin(x * 0.22 + z * 0.16 - t * 1.30 + cross * 0.45) * 0.22 * packet +
+          Math.sin(-x * 0.17 + z * 0.29 - t * 1.65 + 0.8) * 0.10;
+        return ripples * nearWeight + swell * swellWeight;
+      }
+
       function getWaveHeight(x, z, t) {
         var r = Math.sqrt(x * x + z * z);
-        var angle = Math.atan2(z, x);
-        var coastR = getIslandCoastRadius(angle);
-        var distFromShore = r - coastR;
-
+        var coastR = getIslandCoastRadius(Math.atan2(z, x));
         var dIslet = Math.sqrt((x + 6.8) * (x + 6.8) + (z - 12.0) * (z - 12.0)) - 2.0;
-        distFromShore = Math.min(distFromShore, dIslet);
-
-        // Giảm biên độ sóng sát bờ cát để mặt nước không che khuất bãi biển
-        var shoreDamping = THREE.MathUtils.clamp((distFromShore + 0.3) / 2.4, 0.08, 1.0);
-
-        var w1 = Math.sin(x * 0.44 + t * 1.9 + z * 0.2) * 0.11;
-        var w2 = Math.cos(z * 0.5 - t * 1.6 + x * 0.24) * 0.085;
-        var w3 = Math.sin((x - z) * 0.68 + t * 2.5) * 0.045;
-
-        // Sóng lượn dài ngoài khơi đại dương lớn (dịu dần ở đường chân trời xa để giữ đường chân trời phẳng đẹp)
-        var horizonCalm = 1.0 - THREE.MathUtils.clamp((distFromShore - 18.0) / 18.0, 0.0, 0.82);
-        var openSeaFactor = THREE.MathUtils.clamp((distFromShore - 3.5) / 14.0, 0.0, 1.0) * horizonCalm;
-        var swell1 = Math.sin(x * 0.11 + t * 1.25 + z * 0.08) * 0.36;
-        var swell2 = Math.cos(z * 0.13 - t * 1.05 - x * 0.07) * 0.28;
-
+        var shoreDistance = Math.min(r - coastR, dIslet);
+        var damping = THREE.MathUtils.clamp((shoreDistance + 0.3) / 2.4, 0.08, 1.0);
+        var nearRatio = THREE.MathUtils.clamp(shoreDistance / 2.2, 0.25, 1.0);
+        var horizonCalm = 1.0 - THREE.MathUtils.clamp((shoreDistance - 18.0) / 18.0, 0.0, 0.82);
+        var openSea = THREE.MathUtils.clamp((shoreDistance - 3.5) / 14.0, 0.0, 1.0) * horizonCalm;
         var amp = weatherCurrent ? weatherCurrent.waveAmp : 1.0;
-        var nearAmp = 1.0 + (amp - 1.0) * THREE.MathUtils.clamp(distFromShore / 2.2, 0.25, 1.0);
-
-        return (w1 + w2 + w3) * shoreDamping * nearAmp + (swell1 + swell2) * openSeaFactor * amp;
+        return getOceanWaveDisplacement(x, z, t, damping * (1.0 + (amp - 1.0) * nearRatio), openSea * amp);
       }
 
       // ==========================================
@@ -1811,8 +1801,8 @@
       // 4. ĐẠI DƯƠNG RỘNG LỚN, RẠN SAN HÔ & HIỆU ỨNG SÓNG NƯỚC
       // ==========================================
       function createOcean() {
-        var radialRings = 62;
-        var angularSegs = 120;
+        var radialRings = 72;
+        var angularSegs = 160;
 
         // 4.1. Đáy đại dương sâu thẳm phủ vùng thềm vịnh bên dưới mặt nước bán trong suốt
         var abyssFloorGeo = new THREE.CircleGeometry(32, 36);
@@ -1840,14 +1830,14 @@
         var cOuter = srgb(PALETTE.outerOcean);
         var cDeep = srgb(PALETTE.deepNavy);
         var cMid = srgb(PALETTE.midOcean);
-        var cShallow = srgb(PALETTE.shallowTurquoise);
-        var cShore = srgb(PALETTE.shoreAqua);
+        var cShallow = srgb(0x159fa9);
+        var cShore = srgb(0x38c5b3);
         var tmpCol = new THREE.Color();
 
         // Phân bố lưới thích ứng (Adaptive LOD): rất mịn quanh bờ vịnh & rạn san hô, giãn mượt ra khơi xa
         function getRingRadius(ri, angle) {
           var minR = 4.8;
-          var nearRings = 34;
+          var nearRings = 44;
           var reefR = getDioramaOuterRadius(angle) + 1.5;
           if (ri <= nearRings) {
             return THREE.MathUtils.lerp(minR, reefR, ri / nearRings);
@@ -1924,17 +1914,17 @@
 
         var oceanGeo = new THREE.BufferGeometry();
         oceanGeo.setIndex(indices);
-        oceanGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        oceanGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3).setUsage(THREE.DynamicDrawUsage));
         oceanGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         oceanGeo.computeVertexNormals();
 
         var oceanMat = new THREE.MeshStandardMaterial({
           vertexColors: true,
-          roughness: 0.22,
-          metalness: 0.13,
+          roughness: 0.78,
+          metalness: 0.0,
           transparent: true,
-          opacity: 0.85,
-          flatShading: true
+          opacity: 0.92,
+          flatShading: false
         });
         oceanMatRef = oceanMat;
 
@@ -1956,13 +1946,10 @@
         // 4.4. Các mỏm đá biển & tiểu đảo đá ngoài khơi xa tạo chiều sâu đại dương
         createDistantSeaRocks();
 
-        // 4.5. Dải bọt sóng 3 lớp trắng ngà chạy dọc bờ đảo
+        // Bọt sóng mềm cuộn vào bờ; phản sáng liên tục được vẽ trực tiếp trên mặt nước.
         createFoam();
 
-        // 4.6. Các dải gợn sáng lấp lánh trải rộng khắp mặt đại dương
-        createWaterGlints();
-
-        // 4.7. Ánh mặt trời chiếu trải dài suốt mặt biển & hạt nắng kim cương trên đỉnh sóng
+        // Phản chiếu mặt trời dịu, không dùng hạt sáng hoặc các vệt trắng rời.
         setupOceanSunPath();
       }
 
@@ -2248,12 +2235,49 @@
         oceanGroup.add(mergedSeaStacks);
       }
 
-      // Tạo 3 lớp bọt biển trắng ngà ôm sát bờ cát (lưu sẵn sin/cos giúp giảm phép tính mỗi frame)
+      // Bọt ven bờ có mép mờ, uốn theo bờ cát và chuyển động cùng mặt nước.
+      function createShoreFoamMaterial(opacity, phaseOffset) {
+        var mat = new THREE.MeshBasicMaterial({
+          color: srgb(0xaedbd3),
+          transparent: true,
+          opacity: opacity,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        });
+        mat.onBeforeCompile = function (shader) {
+          shader.uniforms.uFoamTime = oceanSunUniforms.uTime;
+          shader.uniforms.uFoamPhase = { value: phaseOffset };
+          shader.vertexShader = 'varying vec2 vFoamUv;\n' + shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            '#include <begin_vertex>\nvFoamUv = uv;'
+          );
+          shader.fragmentShader = 'uniform float uFoamTime;\nuniform float uFoamPhase;\nvarying vec2 vFoamUv;\n' + shader.fragmentShader.replace(
+            '#include <alphatest_fragment>',
+            [
+              'float along = vFoamUv.x * 6.2831853;',
+              'float edgeDrift = sin(along * 11.0 - uFoamTime * 0.45) * 0.07;',
+              'float across = clamp(vFoamUv.y + edgeDrift, 0.0, 1.0);',
+              'float softEdge = smoothstep(0.0, 0.24, across) * (1.0 - smoothstep(0.50, 1.0, across));',
+              'float patches = sin(along * 13.0 + uFoamPhase + sin(along * 5.0) * 1.4) * 0.58 + sin(along * 23.0 - uFoamTime * 0.9) * 0.42;',
+              'float lace = smoothstep(-0.05, 0.55, patches);',
+              'float bubbles = 0.55 + 0.45 * sin(along * 79.0 + across * 17.0 + uFoamTime * 2.0);',
+              'float localCycle = fract(uFoamTime * 0.38 + uFoamPhase / 6.2831853 + sin(along * 7.0) * 0.10);',
+              'float life = smoothstep(0.0, 0.10, localCycle) * (1.0 - smoothstep(0.24, 0.76, localCycle));',
+              'diffuseColor.a *= softEdge * lace * bubbles * life;',
+              '#include <alphatest_fragment>'
+            ].join('\n')
+          );
+        };
+        mat.customProgramCacheKey = function () { return 'broken-shore-foam-v2'; };
+        return mat;
+      }
+
       function createFoam() {
-        var segments = 112;
+        var segments = 192;
 
         function buildShoreFoamRing(radiusOffset, width, phaseOffset, baseOpacity) {
           var positions = new Float32Array(segments * 18);
+          var uvs = new Float32Array(segments * 12);
           var meta = [];
 
           for (var i = 0; i < segments; i++) {
@@ -2263,6 +2287,9 @@
 
             var r0 = getIslandCoastRadius(a0) + radiusOffset;
             var r1 = getIslandCoastRadius(a1) + radiusOffset;
+
+            uvs.set([i / segments, 0, (i + 1) / segments, 1, i / segments, 1,
+              i / segments, 0, (i + 1) / segments, 0, (i + 1) / segments, 1], i * 12);
 
             meta.push({
               c0: Math.cos(a0),
@@ -2276,15 +2303,10 @@
           }
 
           var geo = new THREE.BufferGeometry();
-          geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+          geo.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+          geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 
-          var mat = new THREE.MeshBasicMaterial({
-            color: srgb(PALETTE.foamWhite),
-            transparent: true,
-            opacity: baseOpacity,
-            depthWrite: false,
-            side: THREE.DoubleSide
-          });
+          var mat = createShoreFoamMaterial(baseOpacity, phaseOffset);
 
           var mesh = new THREE.Mesh(geo, mat);
           mesh.renderOrder = 2;
@@ -2301,9 +2323,9 @@
           });
         }
 
-        buildShoreFoamRing(0.08, 0.28, 0.0, 0.88);
-        buildShoreFoamRing(0.46, 0.21, 2.1, 0.56);
-        buildShoreFoamRing(0.92, 0.15, 4.2, 0.34);
+        buildShoreFoamRing(0.04, 0.20, 0.0, 0.40);
+        buildShoreFoamRing(0.04, 0.17, 2.0944, 0.32);
+        buildShoreFoamRing(0.04, 0.14, 4.1888, 0.26);
 
         // 2 vòng bọt biển đồng tâm bao quanh cồn cát ngoài khơi
         var isletRings = [
@@ -2338,75 +2360,6 @@
         }
       }
 
-      // Tạo 86 dải gợn sáng lấp lánh gom thành 6 InstancedMesh (giảm từ 86 xuống 6 draw calls)
-      function createWaterGlints() {
-        var glintCount = 86;
-        var nearUnitGeo = new THREE.RingGeometry(1.0, 1.011, 8, 1, -0.075, 0.15);
-        nearUnitGeo.rotateX(-Math.PI / 2);
-        var farUnitGeo = new THREE.RingGeometry(1.0, 1.0065, 8, 1, -0.052, 0.104);
-        farUnitGeo.rotateX(-Math.PI / 2);
-
-        var buckets = [[], [], [], [], [], []];
-
-        for (var i = 0; i < glintCount; i++) {
-          var isNear = i < 40;
-          var angle = (i / glintCount) * Math.PI * 2 + (i % 7) * 0.21;
-          var coastR = getIslandCoastRadius(angle);
-          var t = (i * 0.37) % 1;
-          var r = isNear
-            ? THREE.MathUtils.lerp(coastR + 1.4, coastR + 12.5, t)
-            : THREE.MathUtils.lerp(coastR + 13.5, 64.0, t);
-
-          var bIdx = (isNear ? 0 : 3) + (i % 3);
-          buckets[bIdx].push({
-            r: r,
-            baseAngle: angle,
-            sampleX: Math.cos(angle) * r,
-            sampleZ: Math.sin(angle) * r,
-            phase: i * 0.82
-          });
-        }
-
-        var sharedDummy = new THREE.Object3D();
-        for (var b = 0; b < 6; b++) {
-          var items = buckets[b];
-          if (items.length === 0) continue;
-          var nearFlag = b < 3;
-          var mat = new THREE.MeshBasicMaterial({
-            color: srgb(nearFlag ? 0xb8fff9 : 0x7fd6ff),
-            transparent: true,
-            opacity: nearFlag ? 0.46 : 0.3,
-            depthWrite: false,
-            side: THREE.DoubleSide
-          });
-          applyHorizonCurveShader(mat, 'glint');
-
-          var inst = new THREE.InstancedMesh(nearFlag ? nearUnitGeo : farUnitGeo, mat, items.length);
-          inst.frustumCulled = false;
-          inst.renderOrder = 2;
-
-          for (var k = 0; k < items.length; k++) {
-            var it = items[k];
-            sharedDummy.position.set(0, 0.035, 0);
-            sharedDummy.rotation.set(0, it.baseAngle, 0);
-            sharedDummy.scale.set(it.r, 1, it.r);
-            sharedDummy.updateMatrix();
-            inst.setMatrixAt(k, sharedDummy.matrix);
-          }
-          inst.instanceMatrix.needsUpdate = true;
-          oceanGroup.add(inst);
-
-          glintRibbons.push({
-            instMesh: inst,
-            mat: mat,
-            isNear: nearFlag,
-            phase: (b % 3) * 2.09,
-            dummy: sharedDummy,
-            items: items
-          });
-        }
-      }
-
       // ==========================================
       // 4.7. SHADER CHÂN TRỜI BIỂN, ÁNH NẮNG TRẢI SUỐT BIỂN & MẶT TRỜI ĐA LỚP
       // ==========================================
@@ -2424,7 +2377,7 @@
           shader.uniforms.uLightningPulse = oceanSunUniforms.uLightningPulse;
           shader.uniforms.uSunCoreColor = oceanSunUniforms.uSunCoreColor;
           shader.uniforms.uSunRoadColor = oceanSunUniforms.uSunRoadColor;
-          shader.uniforms.uSunGlowColor = oceanSunUniforms.uSunGlowColor;
+          shader.uniforms.uWaterRippleStrength = oceanSunUniforms.uWaterRippleStrength;
 
           shader.vertexShader =
             'uniform vec2 uTargetXZ;\nuniform vec2 uCamFwdXZ;\nvarying vec3 vOceanWorldPos;\n' +
@@ -2455,109 +2408,64 @@
               'uniform float uLightningPulse;',
               'uniform vec3 uSunCoreColor;',
               'uniform vec3 uSunRoadColor;',
-              'uniform vec3 uSunGlowColor;',
+              'uniform float uWaterRippleStrength;',
               'varying vec3 vOceanWorldPos;'
             ].join('\n') +
             '\n' +
             shader.fragmentShader.replace(
               '#include <tonemapping_fragment>',
               [
-                'float rOrig = length( vOceanWorldPos.xz );',
-                'gl_FragColor.a = mix( gl_FragColor.a, 1.0, smoothstep( 17.5, 24.2, rOrig ) );',
-                'if ( uSunPathStrength > 0.004 || uLightningPulse > 0.004 ) {',
-                '  vec2 relXZ = vOceanWorldPos.xz - uTargetXZ;',
-                '  float fwd = dot( relXZ, uCamFwdXZ );',
-                '  float lat = dot( relXZ, uCamRightXZ );',
-                '  float absSunLat = abs( lat - uSunLat );',
-                '  float distFade = smoothstep( -28.0, -7.0, fwd ) * ( 1.0 - smoothstep( 30.0, 38.5, fwd ) );',
-                '  if ( uSunPathStrength > 0.004 && distFade > 0.001 ) {',
-                '    float uAur = absSunLat / mix( 10.5, 20.0, uSunsetFactor );',
-                '    float seaAureole = smoothstep( 10.5, 28.5, fwd ) * ( exp( -uAur * uAur ) + 0.16 * uSunsetFactor );',
-                '    float shoreClearA = smoothstep( 7.2, 11.2, rOrig );',
-                '    gl_FragColor.rgb += uSunGlowColor * ( seaAureole * mix( 0.44, 0.92, uSunsetFactor ) * uSunPathStrength * shoreClearA * distFade );',
-                '  }',
-                '  float latWindow = 1.0 - smoothstep( 16.0, 23.5, absSunLat );',
-                '  if ( ( uSunPathStrength > 0.004 && latWindow > 0.001 && distFade > 0.001 ) || uLightningPulse > 0.004 ) {',
-                '    float wA = sin( vOceanWorldPos.x * 1.42 + uTime * 2.35 + vOceanWorldPos.z * 0.94 );',
-                '    float wB = cos( vOceanWorldPos.z * 2.18 - uTime * 1.95 - vOceanWorldPos.x * 1.15 );',
-                '    float wC = sin( ( vOceanWorldPos.x - vOceanWorldPos.z ) * 3.85 + uTime * 3.45 );',
-                '    float waveRipple = wA * 0.45 + wB * 0.35 + wC * 0.2;',
-                '    if ( uSunPathStrength > 0.004 && latWindow > 0.001 ) {',
-                '      float wD = cos( vOceanWorldPos.x * 5.7 + vOceanWorldPos.z * 4.8 - uTime * 4.4 );',
-                '      float shoreClear = smoothstep( 7.2, 11.2, rOrig );',
-                '      float leeShadow = mix( mix( 0.82, 0.34, uSunsetFactor ), 1.0, smoothstep( -6.0, 8.5, fwd ) );',
-                '      float sideClear = smoothstep( 7.6, 10.6, abs( dot( vOceanWorldPos.xz, uCamRightXZ ) ) );',
-                '      float islandMask = shoreClear * max( leeShadow, sideClear * 0.92 );',
-                '      float horizonProx = smoothstep( 3.0, 29.0, fwd );',
-                '      float wobbleAmp = 1.05 + max( 0.0, fwd ) * 0.036;',
-                '      float latDist = abs( ( lat - uSunLat ) + waveRipple * wobbleAmp );',
-                '      float roadHalfW = mix( 1.95, 5.6, horizonProx ) * mix( 1.0, 1.36, uSunsetFactor );',
-                '      float uRoad = latDist / max( 0.45, roadHalfW );',
-                '      float roadProfile = exp( -uRoad * uRoad );',
-                '      float crestWave = sin( fwd * 2.75 - uTime * 3.15 + wA * 1.75 ) * 0.54 + wB * 0.46;',
-                '      float crestBars = smoothstep( -0.24, 0.68, crestWave + horizonProx * 0.36 );',
-                '      float ms = max( 0.0, 0.5 + 0.5 * ( wC * 0.54 + wD * 0.46 ) );',
-                '      float ms2 = ms * ms;',
-                '      float ms4 = ms2 * ms2;',
-                '      float microSpark = ms4 * ms4 * exp( -uRoad * uRoad * 0.72 );',
-                '      vec3 sunContrib =',
-                '        uSunRoadColor * ( roadProfile * ( 0.38 + 0.88 * crestBars ) ) +',
-                '        uSunCoreColor * ( roadProfile * crestBars * 0.84 + microSpark * 1.78 );',
-                '      float totalMask = uSunPathStrength * islandMask * distFade * latWindow;',
-                '      gl_FragColor.rgb += sunContrib * totalMask;',
-                '      float lumBoost = dot( sunContrib, vec3( 0.3333 ) ) * totalMask;',
-                '      gl_FragColor.a = clamp( gl_FragColor.a + lumBoost * 0.2, 0.0, 1.0 );',
-                '    }',
-                '    if ( uLightningPulse > 0.004 ) {',
-                '      gl_FragColor.rgb += vec3( 0.48, 0.72, 1.0 ) * uLightningPulse * smoothstep( 0.1, 0.9, 0.5 + 0.5 * waveRipple ) * 0.36;',
-                '    }',
-                '  }',
+                'float rOrig = length(vOceanWorldPos.xz);',
+                'gl_FragColor.a = mix(gl_FragColor.a, 1.0, smoothstep(17.5, 24.2, rOrig));',
+                'vec2 relXZ = vOceanWorldPos.xz - uTargetXZ;',
+                'float fwd = dot(relXZ, uCamFwdXZ);',
+                'float lat = dot(relXZ, uCamRightXZ);',
+                'vec2 waterXZ = vOceanWorldPos.xz;',
+                'float crossWave = sin(dot(waterXZ, vec2(-0.58, 0.91)) - uTime * 2.65);',
+                'float ripple = sin(dot(waterXZ, vec2(1.65, 1.10)) - uTime * 2.85 + crossWave * 1.15);',
+                'float breakup = sin(dot(waterXZ, vec2(-1.12, 1.48)) + uTime * 1.40 + sin(waterXZ.x * 0.39));',
+                'float softCrest = smoothstep(0.52, 0.98, ripple) * smoothstep(-0.10, 0.72, breakup);',
+                'float waterDetail = (1.0 - smoothstep(32.0, 78.0, rOrig)) * min(1.35, uWaterRippleStrength);',
+                'gl_FragColor.rgb = mix(gl_FragColor.rgb, diffuseColor.rgb, 0.28);',
+                'gl_FragColor.rgb *= 0.86 + (ripple * 0.08 + crossWave * 0.055) * waterDetail;',
+                'vec3 crestTint = gl_FragColor.rgb * vec3(0.90, 1.28, 1.22);',
+                'gl_FragColor.rgb = mix(gl_FragColor.rgb, crestTint, softCrest * waterDetail * 0.72);',
+                'float reflectionFade = smoothstep(3.0, 11.0, fwd) * (1.0 - smoothstep(30.0, 38.5, fwd));',
+                'if (uSunPathStrength > 0.004 && reflectionFade > 0.001) {',
+                '  float horizonProx = smoothstep(4.0, 29.0, fwd);',
+                '  float sway = sin(fwd * 0.32 - uTime * 0.28) * 0.38;',
+                '  float roadWidth = mix(0.9, 2.4, horizonProx) * mix(1.0, 1.3, uSunsetFactor);',
+                '  float roadCoord = (lat - uSunLat + sway) / roadWidth;',
+                '  float roadProfile = exp(-roadCoord * roadCoord * 1.6);',
+                '  float ribbonWave = sin(fwd * 1.9 - uTime * 1.12 + sin(lat * 0.34 + uTime * 0.16) * 0.38);',
+                '  float ribbons = smoothstep(0.55, 0.96, ribbonWave) * smoothstep(0.10, 0.80, breakup);',
+                '  float shoreMask = smoothstep(10.5, 16.0, rOrig);',
+                '  float reflectionMask = uSunPathStrength * reflectionFade * shoreMask;',
+                '  vec3 reflectedLight = mix(uSunRoadColor, uSunCoreColor, ribbons * 0.18) * (0.12 + ribbons * 0.18);',
+                '  float reflectionWeight = clamp(roadProfile * reflectionMask * ribbons * 0.26, 0.0, 0.28);',
+                '  gl_FragColor.rgb = mix(gl_FragColor.rgb, reflectedLight, reflectionWeight);',
+                '}',
+                'if (uLightningPulse > 0.004) {',
+                '  gl_FragColor.rgb += vec3(0.30, 0.48, 0.62) * uLightningPulse * (0.10 + softCrest * 0.12);',
                 '}',
                 '#include <tonemapping_fragment>'
               ].join('\n')
             );
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <lights_physical_fragment>',
+            '#include <lights_physical_fragment>\nmaterial.specularColor = vec3(0.0);'
+          );
         };
         oceanMatRef.customProgramCacheKey = function () {
-          return 'ocean-sunpath-v2';
+          return 'ocean-short-crossing-waves-v5';
         };
         oceanMatRef.needsUpdate = true;
-
-        // 48 hạt nắng kim cương 3D nhảy múa dọc trục ánh mặt trời trên các đỉnh sóng (1 InstancedMesh)
-        var sparkGeo = new THREE.PlaneGeometry(0.95, 0.26);
-        sparkGeo.rotateX(-Math.PI / 2);
-        sunPathSparkleMat = new THREE.MeshBasicMaterial({
-          color: srgb(0xfff7cc),
-          transparent: true,
-          opacity: 0.78,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          side: THREE.DoubleSide
-        });
-        applyHorizonCurveShader(sunPathSparkleMat, 'sunpath-spark');
-
-        sunPathSparkleInst = new THREE.InstancedMesh(sparkGeo, sunPathSparkleMat, 48);
-        sunPathSparkleInst.frustumCulled = false;
-        sunPathSparkleInst.renderOrder = 3;
-        oceanGroup.add(sunPathSparkleInst);
-
-        for (var i = 0; i < 48; i++) {
-          var u = i / 47;
-          var fwdPos = THREE.MathUtils.lerp(-18.0, 29.0, Math.pow(u, 0.88));
-          var latJitter = Math.sin(i * 2.39996) * THREE.MathUtils.lerp(1.5, 4.4, u);
-          sunPathSparkles.push({
-            fwd: fwdPos,
-            latJitter: latJitter,
-            phase: i * 1.17,
-            speed: 2.2 + (i % 5) * 0.42,
-            baseScale: THREE.MathUtils.lerp(0.65, 1.65, u)
-          });
-        }
       }
 
-      // Tạo bầu trời chân trời chuyển sắc + mặt trời đa lớp liền mạch trên cùng 1 dải trời toàn cảnh (KHÔNG có viền khung billboard trái-phải) + tia nắng god-rays
+
+      // Đĩa mặt trời nhỏ, tán xạ khí quyển mềm và màu trời trong không gian tuyến tính.
       function createCelestialSunAndSky() {
         var skyUniforms = {
-          uTime: { value: 0 },
           uHorizonY: { value: 9.83 },
           uTopY: { value: 16.5 },
           uSunPosLocal: { value: new THREE.Vector2(-6.2, 12.5) },
@@ -2565,30 +2473,29 @@
           uSunSize: { value: 1.0 },
           uSunsetFactor: { value: 0.0 },
           uLightningPulse: { value: 0.0 },
-          uZenithCol: { value: srgb(0x0a4b84) },
-          uMidSkyCol: { value: srgb(0x289fd1) },
-          uHorizonCol: { value: srgb(0xbff0ff) },
-          uSunAureoleCol: { value: srgb(0xfff0b8) },
-          uCoreCol: { value: new THREE.Color(1.0, 0.99, 0.93) },
-          uRimCol: { value: new THREE.Color(1.0, 0.82, 0.38) }
+          uZenithCol: { value: srgb(0x437fa8) },
+          uMidSkyCol: { value: srgb(0x82b6ce) },
+          uHorizonCol: { value: srgb(0xd4e4e2) },
+          uSunAureoleCol: { value: srgb(0xffe9c6) },
+          uCoreCol: { value: srgb(0xfffbef) },
+          uRimCol: { value: srgb(0xffe4b7) }
         };
-
         var skyMat = new THREE.ShaderMaterial({
           uniforms: skyUniforms,
           depthTest: true,
           depthWrite: false,
           fog: false,
           side: THREE.DoubleSide,
+          extensions: { derivatives: true },
           vertexShader: [
             'uniform float uHorizonY;',
             'varying vec2 vLocalXY;',
             'void main() {',
-            '  vLocalXY = vec2( position.x, position.y + uHorizonY );',
-            '  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );',
+            '  vLocalXY = vec2(position.x, position.y + uHorizonY);',
+            '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
             '}'
           ].join('\n'),
           fragmentShader: [
-            'uniform float uTime;',
             'uniform float uHorizonY;',
             'uniform float uTopY;',
             'uniform vec2 uSunPosLocal;',
@@ -2604,148 +2511,44 @@
             'uniform vec3 uRimCol;',
             'varying vec2 vLocalXY;',
             'void main() {',
-            '  float span = max( 3.2, uTopY - uHorizonY );',
-            '  float h = clamp( ( vLocalXY.y - uHorizonY ) / span, 0.0, 1.0 );',
-            '  vec3 col = mix( uHorizonCol, uMidSkyCol, smoothstep( 0.0, 0.44, h ) );',
-            '  col = mix( col, uZenithCol, smoothstep( 0.36, 1.0, h ) );',
-            '  vec2 rawDelta = vLocalXY - uSunPosLocal;',
-            '  vec2 dSun = vec2( rawDelta.x * 0.68, rawDelta.y );',
-            '  float distSun = length( dSun );',
-            '  float aureole = exp( -distSun * mix( 0.13, 0.082, uSunsetFactor ) ) * uSunVis;',
-            '  float horizonBand = exp( -abs( vLocalXY.y - uHorizonY ) * mix( 0.55, 0.34, uSunsetFactor ) ) * exp( -abs( rawDelta.x ) * 0.04 ) * uSunVis;',
-            '  col += uSunAureoleCol * ( aureole * mix( 0.48, 0.78, uSunsetFactor ) + horizonBand * mix( 0.3, 0.66, uSunsetFactor ) );',
-            '  float cirrusA = sin( vLocalXY.x * 0.21 + uTime * 0.12 + sin( vLocalXY.y * 1.4 ) * 0.8 );',
-            '  float cirrusB = cos( vLocalXY.x * 0.37 - uTime * 0.08 + vLocalXY.y * 2.1 );',
-            '  float wisp = smoothstep( 0.35, 0.95, cirrusA * 0.55 + cirrusB * 0.45 ) * smoothstep( 0.06, 0.45, h ) * ( 1.0 - smoothstep( 0.65, 0.98, h ) );',
-            '  col += mix( vec3( 0.18, 0.28, 0.36 ), uSunAureoleCol * 0.55, uSunVis ) * wisp * 0.17;',
-            '  if ( uSunVis > 0.005 ) {',
-            '    float horizonClip = smoothstep( uHorizonY - 0.12, uHorizonY + 0.14, vLocalXY.y );',
-            '    if ( horizonClip > 0.002 ) {',
-            '      vec2 p = rawDelta / max( 0.45, uSunSize );',
-            '      float r = length( p );',
-            '      if ( r < 26.0 ) {',
-            '        float discR = 1.65;',
-            '        vec2 dir = p / max( 0.001, r );',
-            '        float ca1 = cos( uTime * 0.024 );',
-            '        float sa1 = sin( uTime * 0.024 );',
-            '        vec2 d1 = vec2( dir.x * ca1 - dir.y * sa1, dir.x * sa1 + dir.y * ca1 );',
-            '        float c2 = d1.x * d1.x - d1.y * d1.y;',
-            '        float c6 = c2 * ( 4.0 * c2 * c2 - 3.0 );',
-            '        float c6_2 = c6 * c6;',
-            '        float c6_4 = c6_2 * c6_2;',
-            '        float c6_8 = c6_4 * c6_4;',
-            '        float spike12 = c6_8 * c6_8;',
-            '        float ca2 = cos( -uTime * 0.017 + 0.19 );',
-            '        float sa2 = sin( -uTime * 0.017 + 0.19 );',
-            '        vec2 d2 = vec2( dir.x * ca2 - dir.y * sa2, dir.x * sa2 + dir.y * ca2 );',
-            '        float q2 = d2.x * d2.x - d2.y * d2.y;',
-            '        float s2 = 2.0 * d2.x * d2.y;',
-            '        float c4 = q2 * q2 - s2 * s2;',
-            '        float c4_2 = c4 * c4;',
-            '        float c4_4 = c4_2 * c4_2;',
-            '        float c4_8 = c4_4 * c4_4;',
-            '        float spike8 = c4_8 * c4_8 * c4_4;',
-            '        float chromo = exp( -max( 0.0, r - discR * 0.92 ) * 2.15 ) * 0.78;',
-            '        float outerCorona = exp( -r * 0.42 ) * 0.44 + exp( -r * 0.18 ) * 0.18;',
-            '        float rays = ( spike12 * 0.34 + spike8 * 0.24 ) * exp( -r * 0.26 ) * smoothstep( discR * 0.72, discR * 1.48, r );',
-            '        float drHalo = ( r - 4.25 ) * 1.55;',
-            '        float haloRing = exp( -drHalo * drHalo ) * 0.09;',
-            '        vec3 glowCol = mix( uSunAureoleCol, uCoreCol, clamp( 0.36 + chromo * 0.5 + rays * 0.45, 0.0, 1.0 ) );',
-            '        col += glowCol * ( chromo + outerCorona + rays + haloRing ) * uSunVis * horizonClip;',
-            '        if ( r < discR + 0.12 ) {',
-            '          float disc = 1.0 - smoothstep( discR - 0.09, discR + 0.05, r );',
-            '          float limb = clamp( r / discR, 0.0, 1.0 );',
-            '          float limbCurve = limb * limb;',
-            '          float verticalGrad = clamp( ( p.y + discR ) / ( 2.0 * discR ), 0.0, 1.0 );',
-            '          vec3 discCol = mix( uCoreCol, uRimCol, limbCurve * mix( 0.32, 0.88, max( uSunsetFactor * 0.5, 1.0 - verticalGrad * uSunsetFactor ) * uSunsetFactor + 0.28 * ( 1.0 - uSunsetFactor ) ) );',
-            '          if ( uSunsetFactor > 0.15 && p.y < 0.25 ) {',
-            '            float mirage = 0.91 + 0.09 * sin( p.y * 21.0 - uTime * 2.2 );',
-            '            disc *= mix( 1.0, mirage, uSunsetFactor * smoothstep( 0.25, -discR, p.y ) );',
-            '          }',
-            '          col = mix( col, discCol, clamp( disc * uSunVis * horizonClip, 0.0, 1.0 ) );',
-            '        }',
-            '      }',
-            '    }',
-            '  }',
-            '  if ( uLightningPulse > 0.004 ) {',
-            '    col += vec3( 0.36, 0.54, 0.82 ) * uLightningPulse * ( 0.4 + 0.6 * ( 1.0 - h ) );',
-            '  }',
-            '  gl_FragColor = vec4( clamp( col, 0.0, 1.0 ), 1.0 );',
+            '  float span = max(3.2, uTopY - uHorizonY);',
+            '  float h = clamp((vLocalXY.y - uHorizonY) / span, 0.0, 1.0);',
+            '  vec3 col = mix(uHorizonCol, uMidSkyCol, smoothstep(0.0, 0.58, h));',
+            '  col = mix(col, uZenithCol, smoothstep(0.35, 1.0, h));',
+            '  vec2 delta = vLocalXY - uSunPosLocal;',
+            '  vec2 hazeP = delta / vec2(mix(6.0, 10.0, uSunsetFactor), mix(3.6, 3.0, uSunsetFactor));',
+            '  float haze = exp(-dot(hazeP, hazeP)) * uSunVis;',
+            '  col = mix(col, uSunAureoleCol, haze * mix(0.12, 0.24, uSunsetFactor));',
+            '  float radius = 0.68 * uSunSize;',
+            '  vec2 p = delta / radius;',
+            '  float r = length(p);',
+            '  float horizonClip = smoothstep(uHorizonY - 0.015, uHorizonY + 0.04, vLocalXY.y);',
+            '  float visibility = uSunVis * horizonClip;',
+            '  float edgeGlow = exp(-max(0.0, r - 1.0) * 3.4) * 0.18;',
+            '  float softGlow = exp(-r * r * 0.35) * mix(0.10, 0.065, uSunsetFactor);',
+            '  col += uSunAureoleCol * (edgeGlow + softGlow) * visibility;',
+            '  float aa = max(fwidth(r), 0.006);',
+            '  float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, r);',
+            '  float mu = sqrt(max(0.0, 1.0 - min(r * r, 1.0)));',
+            '  float vertical = smoothstep(-1.0, 1.0, p.y);',
+            '  vec3 discColor = mix(uRimCol, uCoreCol, 0.18 + vertical * 0.82);',
+            '  discColor *= (0.80 + mu * 0.20) * mix(4.0, 1.85, uSunsetFactor);',
+            '  col = mix(col, discColor, disc * visibility);',
+            '  col += vec3(0.20, 0.30, 0.45) * uLightningPulse * (1.0 - h * 0.6);',
+            '  gl_FragColor = vec4(col, 1.0);',
+            '  #include <tonemapping_fragment>',
+            '  #include <encodings_fragment>',
             '}'
           ].join('\n')
         });
-
-        // Tấm nền bầu trời + Mặt trời liền mạch trên 1 mặt phẳng rộng 260 đơn vị (không bao giờ có đường nối gãy khúc trái-phải)
         var skyGeo = new THREE.PlaneGeometry(260, 32);
         skyGeo.translate(0, 14.0, 0);
         var skyPlane = new THREE.Mesh(skyGeo, skyMat);
         skyPlane.frustumCulled = false;
         skyPlane.renderOrder = -5;
         skyGroup.add(skyPlane);
-
-        // Chùm tia nắng xuyên mây (Volumetric-style Crepuscular God-Rays) tắt mượt 100% trước viền khung để không bao giờ lộ mép
-        var rayUniforms = {
-          uTime: { value: 0 },
-          uRayVis: { value: 1.0 },
-          uSunsetFactor: { value: 0.0 },
-          uRayCol: { value: new THREE.Color(1.0, 0.93, 0.72) }
-        };
-
-        var godRaysMat = new THREE.ShaderMaterial({
-          uniforms: rayUniforms,
-          transparent: true,
-          blending: THREE.AdditiveBlending,
-          depthTest: true,
-          depthWrite: false,
-          fog: false,
-          side: THREE.DoubleSide,
-          vertexShader: [
-            'varying vec2 vUv;',
-            'void main() {',
-            '  vUv = uv;',
-            '  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );',
-            '}'
-          ].join('\n'),
-          fragmentShader: [
-            'uniform float uTime;',
-            'uniform float uRayVis;',
-            'uniform float uSunsetFactor;',
-            'uniform vec3 uRayCol;',
-            'varying vec2 vUv;',
-            'void main() {',
-            '  if ( uRayVis <= 0.005 ) discard;',
-            '  vec2 p = vec2( ( vUv.x - 0.5 ) * 2.0, 1.0 - vUv.y );',
-            '  float edgeX = 1.0 - smoothstep( 0.52, 0.92, abs( p.x ) );',
-            '  if ( edgeX <= 0.002 ) discard;',
-            '  float slantX = p.x - p.y * mix( 0.24, 0.14, uSunsetFactor );',
-            '  float fanSpread = 0.24 + p.y * 0.95;',
-            '  float u = slantX / fanSpread;',
-            '  float uSq = u * u;',
-            '  if ( uSq > 2.1 ) discard;',
-            '  float envelope = exp( -uSq * 3.1 ) * edgeX * smoothstep( 0.0, 0.15, p.y ) * ( 1.0 - smoothstep( 0.42, 0.92, p.y ) );',
-            '  float shafts = 0.5 + 0.5 * cos( u * 13.0 + sin( u * 5.0 - uTime * 0.35 ) * 1.2 + uTime * 0.22 );',
-            '  float fineShafts = 0.5 + 0.5 * sin( u * 23.0 - uTime * 0.28 );',
-            '  float beam = envelope * ( shafts * shafts * 0.7 + fineShafts * fineShafts * fineShafts * 0.3 );',
-            '  float intensity = beam * uRayVis * mix( 0.22, 0.32, uSunsetFactor );',
-            '  if ( intensity <= 0.002 ) discard;',
-            '  gl_FragColor = vec4( uRayCol * intensity, intensity );',
-            '}'
-          ].join('\n')
-        });
-
-        var godRaysGeo = new THREE.PlaneGeometry(38, 19);
-        godRaysGeo.translate(0, -8.8, 0);
-        var godRaysMesh = new THREE.Mesh(godRaysGeo, godRaysMat);
-        godRaysMesh.frustumCulled = false;
-        godRaysMesh.renderOrder = -2;
-        skyGroup.add(godRaysMesh);
-
         celestialSunState.skyBackdrop = skyPlane;
         celestialSunState.skyMat = skyMat;
-        celestialSunState.sunBillboard = null;
-        celestialSunState.sunMat = null;
-        celestialSunState.godRaysMesh = godRaysMesh;
-        celestialSunState.godRaysMat = godRaysMat;
       }
 
       var tmpSkyZenith = new THREE.Color();
@@ -2761,25 +2564,23 @@
       var tmpSkyOrigin = new THREE.Vector3();
       var tmpSunWorld = new THREE.Vector3();
 
-      var C_SKY_ZEN_SUNSET = new THREE.Color(0x1b1947);
-      var C_SKY_ZEN_RAIN = new THREE.Color(0x132b3e);
-      var C_SKY_ZEN_STORM = new THREE.Color(0x071324);
-      var C_SKY_MID_SUNSET = new THREE.Color(0xb8435e);
-      var C_SKY_MID_RAIN = new THREE.Color(0x28475e);
-      var C_SKY_MID_STORM = new THREE.Color(0x11243b);
-      var C_SKY_HOR_SUNSET = new THREE.Color(0xff9c45);
-      var C_SKY_HOR_RAIN = new THREE.Color(0x4a6b82);
-      var C_SKY_HOR_STORM = new THREE.Color(0x1c324a);
-      var C_SUN_AUR_SUNSET = new THREE.Color(0xff7733);
-      var C_SUN_CORE_SUNSET = new THREE.Color(0xfff3b8);
-      var C_SUN_RIM_SUNSET = new THREE.Color(0xff4d1f);
-      var C_SUN_RAY_SUNSET = new THREE.Color(0xffa44f);
+      var C_SKY_ZEN_SUNSET = srgb(0x51435f);
+      var C_SKY_ZEN_RAIN = srgb(0x364b5c);
+      var C_SKY_ZEN_STORM = srgb(0x162333);
+      var C_SKY_MID_SUNSET = srgb(0xc77764);
+      var C_SKY_MID_RAIN = srgb(0x6d8290);
+      var C_SKY_MID_STORM = srgb(0x2e4253);
+      var C_SKY_HOR_SUNSET = srgb(0xffad63);
+      var C_SKY_HOR_RAIN = srgb(0x9eafb5);
+      var C_SKY_HOR_STORM = srgb(0x4e6270);
+      var C_SUN_AUR_SUNSET = srgb(0xf5a65e);
+      var C_SUN_CORE_SUNSET = srgb(0xffc66b);
+      var C_SUN_RIM_SUNSET = srgb(0xf27635);
 
       function updateCelestialSunAndSky(t, delta) {
         if (!camera || !controls || !celestialSunState.skyBackdrop) return;
 
         var tgtVis = 1.0;
-        var tgtRayVis = 1.0;
         var tgtSunset = 0.0;
         var tgtRain = 0.0;
         var tgtStorm = 0.0;
@@ -2788,20 +2589,17 @@
 
         if (activeWeatherKey === 'sunset') {
           tgtVis = 1.0;
-          tgtRayVis = 1.0;
           tgtSunset = 1.0;
-          tgtSize = 1.38;
-          tgtElev = 0.72;
+          tgtSize = 3.45;
+          tgtElev = 1.65;
         } else if (activeWeatherKey === 'rain') {
-          tgtVis = 0.14;
-          tgtRayVis = 0.0;
+          tgtVis = 0.06;
           tgtSunset = 0.12;
           tgtRain = 1.0;
           tgtSize = 0.92;
           tgtElev = 2.2;
         } else if (activeWeatherKey === 'storm') {
           tgtVis = 0.0;
-          tgtRayVis = 0.0;
           tgtSunset = 0.0;
           tgtStorm = 1.0;
           tgtSize = 0.88;
@@ -2810,7 +2608,6 @@
 
         var k = 1.0 - Math.exp(-Math.max(0.001, delta) * 2.8);
         celestialSunState.visibility = THREE.MathUtils.lerp(celestialSunState.visibility, tgtVis, k);
-        celestialSunState.rayVisibility = THREE.MathUtils.lerp(celestialSunState.rayVisibility, tgtRayVis, k);
         celestialSunState.sunsetFactor = THREE.MathUtils.lerp(celestialSunState.sunsetFactor, tgtSunset, k);
         celestialSunState.rainFactor = THREE.MathUtils.lerp(celestialSunState.rainFactor, tgtRain, k);
         celestialSunState.stormFactor = THREE.MathUtils.lerp(celestialSunState.stormFactor, tgtStorm, k);
@@ -2854,13 +2651,12 @@
         var skyRoom = effTopY - yCamPeak;
         var angleVisFade = THREE.MathUtils.clamp((skyRoom - 0.6) / 2.2, 0.0, 1.0);
         var effSunVis = celestialSunState.visibility * angleVisFade;
-        var effRayVis = celestialSunState.rayVisibility * angleVisFade;
 
         var sunYCam = Math.min(
-          effTopY - 1.55 * celestialSunState.sunSize,
+          effTopY - 0.95 * celestialSunState.sunSize,
           yCamPeak + celestialSunState.elevAboveHorizon
         );
-        sunYCam = Math.max(yCamPeak + 0.38, sunYCam);
+        sunYCam = Math.max(yCamPeak + 0.12, sunYCam);
 
         camera.updateMatrixWorld();
         tmpCamRight3.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
@@ -2876,7 +2672,7 @@
         celestialSunState.skyBackdrop.quaternion.copy(camera.quaternion);
         celestialSunState.skyBackdrop.visible = skyRoom > -1.2;
 
-        // Đặt vị trí chùm tia nắng God-rays ở lớp trời trước nền trời (depth = 46 đơn vị)
+        // Vị trí mặt trời và hướng nắng cùng nằm về một phía trong khung nhìn.
         tmpSunWorld
           .copy(controls.target)
           .addScaledVector(tmpCamFwd3, 46.0)
@@ -2884,24 +2680,27 @@
           .addScaledVector(tmpCamUp3, sunYCam);
         celestialSunState.worldPos.copy(tmpSunWorld);
 
-        celestialSunState.godRaysMesh.position.copy(tmpSunWorld);
-        celestialSunState.godRaysMesh.quaternion.copy(camera.quaternion);
-        celestialSunState.godRaysMesh.visible = effRayVis > 0.005;
+        if (sceneLights.sun && weatherCurrent) {
+          sceneLights.sun.position.set(
+            fwdX * 30.0 + rightX * sunLat * 1.8,
+            weatherCurrent.sunPos.y,
+            fwdZ * 30.0 + rightZ * sunLat * 1.8
+          );
+        }
 
         // Pha màu bầu trời & mặt trời mượt mà giữa Nắng đẹp -> Hoàng hôn -> Mưa rào -> Giông bão
         var sf = celestialSunState.sunsetFactor;
         var rf = celestialSunState.rainFactor;
         var stf = celestialSunState.stormFactor;
 
-        tmpSkyZenith.setHex(0x0a4b87).lerp(C_SKY_ZEN_SUNSET, sf).lerp(C_SKY_ZEN_RAIN, rf).lerp(C_SKY_ZEN_STORM, stf);
-        tmpSkyMid.setHex(0x2198d4).lerp(C_SKY_MID_SUNSET, sf).lerp(C_SKY_MID_RAIN, rf).lerp(C_SKY_MID_STORM, stf);
-        tmpSkyHorizon.setHex(0x88e2ff).lerp(C_SKY_HOR_SUNSET, sf).lerp(C_SKY_HOR_RAIN, rf).lerp(C_SKY_HOR_STORM, stf);
-        tmpSunAureole.setHex(0xfff1bf).lerp(C_SUN_AUR_SUNSET, sf * 0.85);
-        tmpSunCore.setHex(0xfffef6).lerp(C_SUN_CORE_SUNSET, sf);
-        tmpSunRim.setHex(0xffd66b).lerp(C_SUN_RIM_SUNSET, sf);
+        tmpSkyZenith.setHex(0x437fa8).convertSRGBToLinear().lerp(C_SKY_ZEN_SUNSET, sf).lerp(C_SKY_ZEN_RAIN, rf).lerp(C_SKY_ZEN_STORM, stf);
+        tmpSkyMid.setHex(0x82b6ce).convertSRGBToLinear().lerp(C_SKY_MID_SUNSET, sf).lerp(C_SKY_MID_RAIN, rf).lerp(C_SKY_MID_STORM, stf);
+        tmpSkyHorizon.setHex(0xd4e4e2).convertSRGBToLinear().lerp(C_SKY_HOR_SUNSET, sf).lerp(C_SKY_HOR_RAIN, rf).lerp(C_SKY_HOR_STORM, stf);
+        tmpSunAureole.setHex(0xffe9c6).convertSRGBToLinear().lerp(C_SUN_AUR_SUNSET, sf * 0.85);
+        tmpSunCore.setHex(0xfffbef).convertSRGBToLinear().lerp(C_SUN_CORE_SUNSET, sf);
+        tmpSunRim.setHex(0xffe4b7).convertSRGBToLinear().lerp(C_SUN_RIM_SUNSET, sf);
 
         var skyU = celestialSunState.skyMat.uniforms;
-        skyU.uTime.value = t;
         skyU.uHorizonY.value = yCamPeak;
         skyU.uTopY.value = effTopY;
         skyU.uSunPosLocal.value.set(sunLat, sunYCam);
@@ -2916,17 +2715,13 @@
         skyU.uCoreCol.value.copy(tmpSunCore);
         skyU.uRimCol.value.copy(tmpSunRim);
 
-        var rayU = celestialSunState.godRaysMat.uniforms;
-        rayU.uTime.value = t;
-        rayU.uRayVis.value = effRayVis;
-        rayU.uSunsetFactor.value = sf;
-        rayU.uRayCol.value.setHex(0xfff4cc).lerp(C_SUN_RAY_SUNSET, sf);
+
       }
 
       function updateOceanSunPath(t) {
         var sf = celestialSunState.sunsetFactor;
-        var vis = celestialSunState.visibility;
-        var pathStrength = vis * THREE.MathUtils.lerp(1.05, 1.48, sf);
+        var vis = celestialSunState.skyMat ? celestialSunState.skyMat.uniforms.uSunVis.value : 0.0;
+        var pathStrength = vis * THREE.MathUtils.lerp(0.72, 1.08, sf);
 
         oceanSunUniforms.uTime.value = t;
         oceanSunUniforms.uSunLat.value = celestialSunState.sunLat;
@@ -2934,91 +2729,65 @@
         oceanSunUniforms.uSunsetFactor.value = sf;
         oceanSunUniforms.uLightningPulse.value = lightningState.pulse;
 
-        tmpSunCore.copy(srgb(0xfffef2)).lerp(srgb(0xfff0a6), sf);
-        tmpSunRoad.copy(srgb(0xffd875)).lerp(srgb(0xff8429), sf);
-        tmpSunAureole.copy(srgb(0x9ef7f0)).lerp(srgb(0xff5226), sf);
+        tmpSunCore.copy(srgb(0xffe5b0)).lerp(srgb(0xffcf79), sf);
+        tmpSunRoad.copy(srgb(0xe6c793)).lerp(srgb(0xff8b38), sf);
 
         oceanSunUniforms.uSunCoreColor.value.copy(tmpSunCore);
         oceanSunUniforms.uSunRoadColor.value.copy(tmpSunRoad);
-        oceanSunUniforms.uSunGlowColor.value.copy(tmpSunAureole);
 
-        if (sunPathSparkleInst && sunPathSparkleMat) {
-          var showSparks = pathStrength > 0.08;
-          sunPathSparkleInst.visible = showSparks;
-          if (showSparks) {
-            sunPathSparkleMat.color.copy(srgb(0xfff9d6)).lerp(srgb(0xffb85c), sf * 0.85);
-            sunPathSparkleMat.opacity = Math.min(0.92, 0.58 * pathStrength);
-
-            var tx = oceanSunUniforms.uTargetXZ.value.x;
-            var tz = oceanSunUniforms.uTargetXZ.value.y;
-            var fx = oceanSunUniforms.uCamFwdXZ.value.x;
-            var fz = oceanSunUniforms.uCamFwdXZ.value.y;
-            var rx = oceanSunUniforms.uCamRightXZ.value.x;
-            var rz = oceanSunUniforms.uCamRightXZ.value.y;
-            var sLat = celestialSunState.sunLat;
-            var camYaw = Math.atan2(fx, fz);
-
-            for (var i = 0; i < sunPathSparkles.length; i++) {
-              var sp = sunPathSparkles[i];
-              var lat = sLat + sp.latJitter * THREE.MathUtils.lerp(1.0, 1.3, sf) + Math.sin(t * 1.4 + sp.phase) * 0.45;
-              var wx = tx + fx * sp.fwd + rx * lat;
-              var wz = tz + fz * sp.fwd + rz * lat;
-              var terrY = getTerrainHeight(wx, wz);
-              var rOrig = Math.sqrt(wx * wx + wz * wz);
-              var blocked = terrY > -0.14 || (rOrig < 10.2 && sp.fwd < 5.0 && Math.abs(lat) < 7.8 && sf > 0.45);
-
-              if (blocked) {
-                sharedAnimDummy.position.set(wx, -20, wz);
-                sharedAnimDummy.scale.set(0.001, 0.001, 0.001);
-              } else {
-                var wy = getWaveHeight(wx, wz, t);
-                var twinkle = Math.max(0.05, 0.5 + 0.5 * Math.sin(t * sp.speed + sp.phase));
-                sharedAnimDummy.position.set(wx, wy + 0.045, wz);
-                sharedAnimDummy.rotation.set(0, camYaw, 0);
-                sharedAnimDummy.scale.set(
-                  sp.baseScale * (0.55 + twinkle * 0.85),
-                  1.0,
-                  sp.baseScale * (0.5 + twinkle * 0.6)
-                );
-              }
-              sharedAnimDummy.updateMatrix();
-              sunPathSparkleInst.setMatrixAt(i, sharedAnimDummy.matrix);
-            }
-            sunPathSparkleInst.instanceMatrix.needsUpdate = true;
-          }
+        if (weatherCurrent) {
+          oceanSunUniforms.uWaterRippleStrength.value = weatherCurrent.glintOpacityMul;
         }
       }
+
 
       // ==========================================
       // 5. CÂY CỐI & HỆ SINH THÁI NHIỆT ĐỚI ĐỘ CHI TIẾT CAO
       // ==========================================
+      // Vùng trống cho đường lên đồi, bậc Tiki, hồ nước và khu sinh hoạt.
+      function isLandscapeClearing(x, z, padding) {
+        var circles = [
+          [-1.65, -1.25, 1.85], [3.65, -2.45, 2.0],
+          [-3.3, 6.2, 2.2], [1.2, 6.4, 2.0]
+        ];
+        for (var i = 0; i < circles.length; i++) {
+          var c = circles[i];
+          if (Math.hypot(x - c[0], z - c[1]) < c[2] + padding) return true;
+        }
+        var paths = [
+          [6.7, 6.4, -0.45, -0.1, 1.05],
+          [1.35, 0.45, 3.3, -1.95, 0.78],
+          [6.4, -1.1, 8.6, 1.2, 0.85],
+          [-2.92, -2.82, -1.65, -1.25, 0.65]
+        ];
+        for (var j = 0; j < paths.length; j++) {
+          var p = paths[j], dx = p[2] - p[0], dz = p[3] - p[1];
+          var t = THREE.MathUtils.clamp(((x - p[0]) * dx + (z - p[1]) * dz) / (dx * dx + dz * dz), 0, 1);
+          if (Math.hypot(x - p[0] - t * dx, z - p[1] - t * dz) < p[4] + padding) return true;
+        }
+        return false;
+      }
+
       function createVegetation() {
         var palmSpecs = [
-          // Hai cây dừa đôi bên phải bãi biển để mắc võng (giữ nguyên toạ độ mỏ neo võng)
+          // Hai cây neo võng, giữ đúng vị trí của khu nghỉ.
           { x: 6.4, z: -1.1, scale: 1.06, leanDir: 0.3, leanAmt: 0.28, rotY: 0.4 },
           { x: 8.6, z: 1.2, scale: 1.12, leanDir: 1.8, leanAmt: 0.32, rotY: 2.1 },
-          // Cụm dừa gần khu ghế nghỉ, bờ vịnh đông & cầu tàu
-          { x: 2.35, z: 6.15, scale: 1.16, leanDir: 0.8, leanAmt: 0.35, rotY: 1.2 },
-          { x: -1.45, z: 7.65, scale: 0.94, leanDir: 1.35, leanAmt: 0.31, rotY: 3.5 },
-          { x: 7.45, z: 3.75, scale: 0.96, leanDir: 0.55, leanAmt: 0.34, rotY: 1.5 },
-          // Mũi cát phía tây & khu lửa trại
-          { x: -5.55, z: 7.05, scale: 0.96, leanDir: 2.05, leanAmt: 0.35, rotY: 2.4 },
-          { x: -7.45, z: 5.75, scale: 1.1, leanDir: 2.3, leanAmt: 0.38, rotY: 0.9 },
-          { x: -8.85, z: 3.35, scale: 0.86, leanDir: 2.7, leanAmt: 0.42, rotY: 4.2 },
-          // Sườn đồi trung tâm, vách thác & chòi vọng cảnh Tiki
-          { x: -0.65, z: -3.25, scale: 1.2, leanDir: -0.4, leanAmt: 0.24, rotY: 2.6 },
-          { x: -4.65, z: 0.85, scale: 0.98, leanDir: 3.1, leanAmt: 0.28, rotY: 5.1 },
-          { x: 3.15, z: -4.85, scale: 1.04, leanDir: -1.1, leanAmt: 0.3, rotY: 1.7 },
-          { x: 5.45, z: -3.55, scale: 0.88, leanDir: -0.6, leanAmt: 0.34, rotY: 3.9 },
+          // Một cây tạo bóng mát cho bãi nghỉ; cụm đôi ở mũi phía tây.
+          { x: -1.45, z: 7.65, scale: 0.88, leanDir: 1.35, leanAmt: 0.31, rotY: 3.5 },
+          { x: -7.45, z: 5.75, scale: 1.02, leanDir: 2.3, leanAmt: 0.38, rotY: 0.9 },
+          { x: -8.85, z: 3.35, scale: 0.78, leanDir: 2.7, leanAmt: 0.42, rotY: 4.2 },
+          // Tầng cây phía sau đồi, chừa khoảng nhìn vào thác và chòi Tiki.
+          { x: -4.65, z: 0.85, scale: 0.90, leanDir: 3.1, leanAmt: 0.28, rotY: 5.1 },
+          { x: 3.15, z: -4.85, scale: 0.96, leanDir: -1.1, leanAmt: 0.3, rotY: 1.7 },
           { x: -2.45, z: -6.35, scale: 0.96, leanDir: -2.2, leanAmt: 0.26, rotY: 0.3 },
           { x: -6.75, z: -3.55, scale: 1.02, leanDir: -2.6, leanAmt: 0.31, rotY: 4.6 },
-          { x: 0.95, z: -6.45, scale: 0.9, leanDir: -1.5, leanAmt: 0.29, rotY: 3.2 },
-          // Cặp dừa lớn - nhỏ trên cồn cát ngoài khơi
+          // Cặp dừa nhỏ trên cồn cát ngoài khơi.
           { x: -6.65, z: 11.85, scale: 0.76, leanDir: 1.9, leanAmt: 0.36, rotY: 2.8 },
           { x: -7.32, z: 12.28, scale: 0.52, leanDir: 2.65, leanAmt: 0.44, rotY: 1.1 }
         ];
 
-        // Gộp toàn bộ 17 thân dừa tĩnh trên đảo thành 1 mesh duy nhất (tiết kiệm 66 draw calls)
+        // Gộp thân dừa tĩnh thành một mesh; giữ các tán cây riêng để đung đưa.
         var allPalmTrunks = [];
         for (var i = 0; i < palmSpecs.length; i++) {
           var spec = palmSpecs[i];
@@ -3030,82 +2799,64 @@
         mergedTrunksMesh.receiveShadow = true;
         vegetationGroup.add(mergedTrunksMesh);
 
-        // 18 bụi cây hoa dâm bụt nhiệt đới nhiều tầng lá (mỗi bụi 1 mesh vertexColors)
+        // Bụi thấp gom theo cụm, hoa dâm bụt làm điểm nhấn nhẹ.
         var bushLocations = [
-          { x: -1.2, z: 1.85, s: 1.02, flower: PALETTE.coralRed },
-          { x: 1.65, z: -0.85, s: 1.12, flower: PALETTE.sunnyYellow },
-          { x: -3.65, z: 2.65, s: 0.98, flower: PALETTE.tropicalPink },
-          { x: 5.15, z: -1.45, s: 1.08, flower: PALETTE.tropicalOrange },
-          { x: -5.45, z: -1.4, s: 1.18, flower: PALETTE.tropicalOrange },
-          { x: -2.1, z: -4.85, s: 1.06, flower: PALETTE.coralRed },
-          { x: 0.8, z: -5.25, s: 0.92, flower: PALETTE.sunnyYellow },
-          { x: 2.85, z: 1.25, s: 0.85, flower: PALETTE.tropicalPink },
-          { x: -0.45, z: -0.85, s: 0.88, flower: 0 },
-          { x: -3.85, z: -4.95, s: 1.14, flower: PALETTE.tropicalPink },
-          { x: 5.85, z: -4.25, s: 0.92, flower: PALETTE.tropicalOrange },
-          { x: -6.25, z: 1.85, s: 0.9, flower: PALETTE.sunnyYellow },
-          { x: 0.45, z: 3.45, s: 0.8, flower: PALETTE.coralRed },
-          { x: -4.65, z: -2.25, s: 1.04, flower: 0 },
-          { x: 4.55, z: 1.95, s: 0.94, flower: PALETTE.sunnyYellow },
-          { x: -7.1, z: -0.6, s: 0.96, flower: PALETTE.coralRed },
-          { x: 2.15, z: -3.95, s: 0.88, flower: PALETTE.tropicalPink },
-          { x: -2.4, z: 4.35, s: 0.84, flower: PALETTE.sunnyYellow }
+          { x: -5.45, z: -1.4, s: 0.78, flower: PALETTE.coralRed },
+          { x: -4.65, z: -2.25, s: 0.70, flower: 0 },
+          { x: -3.85, z: -4.95, s: 0.82, flower: PALETTE.coralRed },
+          { x: 0.8, z: -5.25, s: 0.72, flower: 0 },
+          { x: 5.85, z: -4.25, s: 0.76, flower: PALETTE.coralRed },
+          { x: -6.25, z: 1.85, s: 0.66, flower: 0 },
+          { x: -3.65, z: 2.65, s: 0.72, flower: PALETTE.coralRed },
+          { x: 5.85, z: 2.0, s: 0.64, flower: 0 }
         ];
 
         for (var b = 0; b < bushLocations.length; b++) {
           var bLoc = bushLocations[b];
+          if (isLandscapeClearing(bLoc.x, bLoc.z, bLoc.s * 0.45)) continue;
           var by = sampleSurfaceY(bLoc.x, bLoc.z);
           var bush = createBush(bLoc.s, bLoc.flower, b);
           bush.position.set(bLoc.x, by - 0.04, bLoc.z);
           vegetationGroup.add(bush);
         }
 
-        // 15 khóm chuối cảnh / trầu bà lá rộng nhiệt đới quanh hồ thác và sườn đồi
+        // Cây lá rộng tập trung phía sau hồ và ở chân cụm dừa.
         var broadleafCoords = [
-          { x: -2.95, z: -0.45, s: 1.08 },
-          { x: -0.45, z: -2.15, s: 1.02 },
-          { x: -2.55, z: -2.95, s: 0.96 },
-          { x: -4.15, z: 0.55, s: 1.12 },
-          { x: 1.95, z: -2.35, s: 0.95 },
-          { x: 4.95, z: -2.85, s: 0.98 },
-          { x: 5.65, z: 0.35, s: 1.05 },
-          { x: -5.85, z: 3.15, s: 1.0 },
-          { x: -1.85, z: 2.85, s: 0.92 },
-          { x: 3.55, z: 2.85, s: 0.94 },
-          { x: -5.35, z: -3.45, s: 1.04 },
-          { x: -0.25, z: -4.65, s: 0.98 },
-          { x: 6.45, z: -2.15, s: 0.9 },
-          { x: -7.45, z: 1.35, s: 0.92 },
-          { x: 0.95, z: 1.95, s: 0.86 }
+          { x: -3.9, z: -1.15, s: 0.72 },
+          { x: -2.55, z: -3.3, s: 0.68 },
+          { x: -5.35, z: -3.45, s: 0.76 },
+          { x: -0.25, z: -4.65, s: 0.68 },
+          { x: 6.1, z: -3.65, s: 0.70 },
+          { x: -6.7, z: 2.65, s: 0.66 }
         ];
         for (var bl = 0; bl < broadleafCoords.length; bl++) {
           var blc = broadleafCoords[bl];
+          if (isLandscapeClearing(blc.x, blc.z, blc.s * 0.4)) continue;
           var bly = sampleSurfaceY(blc.x, blc.z);
           var cluster = createBroadleafCluster(blc.s, bl);
           cluster.position.set(blc.x, bly - 0.02, blc.z);
           vegetationGroup.add(cluster);
         }
 
-        // 16 bụi dương xỉ tán cong chi tiết gộp chung thành 1 mesh duy nhất
+        // Một vài cụm dương xỉ thấp ở sườn đồi có bóng râm.
         var fernCoords = [
-          [-2.75, -0.78], [-0.72, -1.88], [-2.18, -3.12], [2.42, -1.65],
-          [-5.12, 0.22], [4.15, 0.45], [-1.52, 3.15], [1.38, -3.62],
-          [-3.18, 4.12], [6.18, -2.42], [2.75, -0.55], [-4.25, -3.65],
-          [5.15, 2.55], [-6.65, 4.15], [0.25, -2.65], [-1.15, 0.45]
+          [-3.8, -0.5], [-3.5, -3.1], [-5.7, -2.6],
+          [-4.6, 2.1], [5.5, -4.5], [-0.7, -4.8]
         ];
         var allFernGeos = [];
         for (var f = 0; f < fernCoords.length; f++) {
           var fx = fernCoords[f][0];
           var fz = fernCoords[f][1];
+          if (isLandscapeClearing(fx, fz, 0.25)) continue;
           var fy = sampleSurfaceY(fx, fz) + 0.02;
-          appendTropicalFernGeos(fx, fy, fz, 0.84 + (f % 3) * 0.16, f * 1.15, allFernGeos);
+          appendTropicalFernGeos(fx, fy, fz, 0.50 + (f % 3) * 0.08, f * 1.15, allFernGeos);
         }
         var mergedFerns = new THREE.Mesh(mergeBufferGeos(allFernGeos), SHARED_MATS.vertexFoliage);
         mergedFerns.castShadow = true;
         mergedFerns.receiveShadow = true;
         vegetationGroup.add(mergedFerns);
 
-        // Thảm cỏ đa sắc 1.100 nhánh + 145 hoa dại bằng InstancedMesh (chỉ 2 draw calls)
+        // Cỏ thấp theo mảng nhỏ, chừa khoảng đất trống giữa các cụm.
         createInstancedGrass();
       }
 
@@ -3478,9 +3229,9 @@
         }
       }
 
-      // Tạo 1.100 cụm cỏ đa sắc + cỏ cồn cát & 145 khóm hoa dại bằng 2 InstancedMesh
+      // Cỏ và hoa thưa trong các mảng trồng cố định, tránh lối đi và bãi cát.
       function createInstancedGrass() {
-        var maxGrass = 1100;
+        var maxGrass = 160;
         var tuftParts = [];
         var b1 = new THREE.ConeGeometry(0.068, 0.36, 3);
         b1.translate(0, 0.18, 0);
@@ -3507,14 +3258,14 @@
         instancedGrass.receiveShadow = true;
 
         var grassShades = [
-          srgb(0x7fd44c),
-          srgb(PALETTE.grassLight),
-          srgb(PALETTE.grassMid),
-          srgb(0x8bc95c),
-          srgb(0x9ac456)
+          srgb(0x648d48),
+          srgb(0x789c55),
+          srgb(0x527d40),
+          srgb(0x71934f),
+          srgb(0x839f5b)
         ];
 
-        var maxFlowers = 145;
+        var maxFlowers = 18;
         var flParts = [];
         for (var fp = 0; fp < 5; fp++) {
           var fpa = (fp / 5) * Math.PI * 2;
@@ -3546,39 +3297,49 @@
           return (seed - 1) / 2147483646;
         }
 
-        for (var attempt = 0; attempt < 3400 && placedGrass < maxGrass; attempt++) {
-          var r = 0.7 + Math.sqrt(pseudoRand()) * 10.6;
+        var patches = [
+          { x: -5.0, z: -2.3, r: 1.7 },
+          { x: -4.5, z: 2.4, r: 1.25 },
+          { x: -0.5, z: -5.4, r: 1.3 },
+          { x: 5.8, z: -4.1, r: 1.2 },
+          { x: 6.1, z: 1.4, r: 1.1 },
+          { x: -7.0, z: 2.0, r: 0.9 }
+        ];
+        var grassPositions = [];
+        for (var attempt = 0; attempt < 2200 && placedGrass < maxGrass; attempt++) {
+          var patch = patches[attempt % patches.length];
+          var r = Math.sqrt(pseudoRand()) * patch.r;
           var a = pseudoRand() * Math.PI * 2;
-          var x = Math.cos(a) * r;
-          var z = Math.sin(a) * r;
+          var x = patch.x + Math.cos(a) * r;
+          var z = patch.z + Math.sin(a) * r;
+          if (isLandscapeClearing(x, z, 0.22)) continue;
           var y = sampleSurfaceY(x, z);
-
-          var distPool = Math.sqrt((x + 1.65) * (x + 1.65) + (z + 1.25) * (z + 1.25));
-          var distTiki = Math.sqrt((x - 3.65) * (x - 3.65) + (z + 2.45) * (z + 2.45));
-          var distCamp = Math.sqrt((x + 3.3) * (x + 3.3) + (z - 6.2) * (z - 6.2));
-          var isMeadow = y > 1.08 && y < 4.75;
-          var isDuneEdge = y > 0.72 && y <= 1.08 && pseudoRand() < 0.24;
-
-          if ((isMeadow || isDuneEdge) && distPool > 1.62 && distTiki > 1.65 && distCamp > 1.45) {
+          if (y < 1.12 || y > 4.5) continue;
+          if (Math.abs(sampleSurfaceY(x + 0.28, z) - y) > 0.32 || Math.abs(sampleSurfaceY(x, z + 0.28) - y) > 0.32) continue;
+          var crowded = false;
+          for (var gp = 0; gp < grassPositions.length; gp++) {
+            if (Math.hypot(x - grassPositions[gp][0], z - grassPositions[gp][1]) < 0.30) { crowded = true; break; }
+          }
+          if (crowded) continue;
+          grassPositions.push([x, z]);
+          {
             dummy.position.set(x, y - 0.025, z);
             dummy.rotation.set(
               (pseudoRand() - 0.5) * 0.28,
               pseudoRand() * Math.PI * 2,
               (pseudoRand() - 0.5) * 0.28
             );
-            var s = (isDuneEdge ? 0.58 : 0.68) + pseudoRand() * 0.78;
-            dummy.scale.set(s, s * (0.85 + pseudoRand() * 0.4), s);
+            var s = 0.42 + pseudoRand() * 0.32;
+            dummy.scale.set(s, s * (0.70 + pseudoRand() * 0.20), s);
             dummy.updateMatrix();
 
             instancedGrass.setMatrixAt(placedGrass, dummy.matrix);
-            var shade = isDuneEdge
-              ? grassShades[4]
-              : grassShades[Math.floor(pseudoRand() * 4)];
+            var shade = grassShades[Math.floor(pseudoRand() * grassShades.length)];
             instancedGrass.setColorAt(placedGrass, shade);
             placedGrass++;
 
-            if (isMeadow && placedFlowers < maxFlowers && pseudoRand() < 0.16) {
-              var fs = 0.75 + pseudoRand() * 0.55;
+            if (placedFlowers < maxFlowers && pseudoRand() < 0.10) {
+              var fs = 0.55 + pseudoRand() * 0.25;
               dummy.position.set(x + 0.05, y + 0.16 * s, z - 0.04);
               dummy.rotation.set(0, pseudoRand() * Math.PI * 2, 0);
               dummy.scale.set(fs, fs, fs);
@@ -3593,11 +3354,13 @@
           }
         }
 
+        instancedGrass.name = 'Low grass patches';
         instancedGrass.count = placedGrass;
         instancedGrass.instanceMatrix.needsUpdate = true;
         if (instancedGrass.instanceColor) instancedGrass.instanceColor.needsUpdate = true;
         vegetationGroup.add(instancedGrass);
 
+        instancedFlowers.name = 'Sparse wildflowers';
         instancedFlowers.count = placedFlowers;
         instancedFlowers.instanceMatrix.needsUpdate = true;
         if (instancedFlowers.instanceColor) instancedFlowers.instanceColor.needsUpdate = true;
@@ -6375,7 +6138,7 @@
 
           updateWeatherParticles(elapsedTime, delta);
           updateOceanWaves(elapsedTime);
-          updateFoamAndGlints(elapsedTime);
+          updateShoreFoam(elapsedTime);
           updateVegetationSway(elapsedTime);
           updateBoatAndHammock(elapsedTime);
           updateMovingBoats(elapsedTime);
@@ -6498,11 +6261,6 @@
           gullGroup.visible = cur.birdScale > 0.04;
           var bs = Math.max(0.01, cur.birdScale);
           gullGroup.scale.set(bs, bs, bs);
-        }
-
-        for (var g = 0; g < glintRibbons.length; g++) {
-          var gl = glintRibbons[g];
-          gl.mat.color.copy(gl.isNear ? cur.glintNear : cur.glintFar);
         }
 
         var flicker = (!isPaused && cur.lanternLightIntensity > 0.05)
@@ -6641,110 +6399,67 @@
         }
       }
 
-      // Sóng đại dương tối ưu dùng bảng hệ số tính sẵn (không tốn sqrt/atan2 mỗi đỉnh -> < 0.25ms/frame cho 7.560 đỉnh)
+      // Dùng hệ số ven bờ tính sẵn; cùng hàm sóng với thuyền, người bơi và bọt biển.
       function updateOceanWaves(t) {
         if (!oceanData) return;
-
         var posAttr = oceanData.surfaceGeo.attributes.position;
         var posArr = posAttr.array;
         var base = oceanData.baseCoords;
-        var damp = oceanData.shoreDamp;
-        var nearRat = oceanData.nearRatio;
-        var openSea = oceanData.openSea;
-        var count = posAttr.count;
         var amp = weatherCurrent ? weatherCurrent.waveAmp : 1.0;
-        var ampDelta = amp - 1.0;
-
-        var t19 = t * 1.9;
-        var t16 = t * 1.6;
-        var t25 = t * 2.5;
-        var t125 = t * 1.25;
-        var t105 = t * 1.05;
-
-        for (var i = 0; i < count; i++) {
-          var x = base[i * 2];
-          var z = base[i * 2 + 1];
-
-          var wNear =
-            Math.sin(x * 0.44 + t19 + z * 0.2) * 0.11 +
-            Math.cos(z * 0.5 - t16 + x * 0.24) * 0.085 +
-            Math.sin((x - z) * 0.68 + t25) * 0.045;
-
-          var y = wNear * damp[i] * (1.0 + ampDelta * nearRat[i]);
-          var os = openSea[i];
-          if (os > 0.0) {
-            var swell =
-              Math.sin(x * 0.11 + t125 + z * 0.08) * 0.36 +
-              Math.cos(z * 0.13 - t105 - x * 0.07) * 0.28;
-            y += swell * os * amp;
-          }
-
-          posArr[i * 3 + 1] = y;
+        for (var i = 0; i < posAttr.count; i++) {
+          var nearWeight = oceanData.shoreDamp[i] * (1.0 + (amp - 1.0) * oceanData.nearRatio[i]);
+          posArr[i * 3 + 1] = getOceanWaveDisplacement(base[i * 2], base[i * 2 + 1], t, nearWeight, oceanData.openSea[i] * amp);
         }
         posAttr.needsUpdate = true;
+        // Smooth normals follow the displaced surface instead of lighting each triangle separately.
+        oceanData.surfaceGeo.computeVertexNormals();
       }
 
-      function updateFoamAndGlints(t) {
+      function updateShoreFoam(t) {
+        var amp = weatherCurrent ? weatherCurrent.waveAmp : 1.0;
         for (var f = 0; f < foamBands.length; f++) {
           var band = foamBands[f];
-          var waveCycle = Math.sin(t * 1.9 + band.phaseOffset);
-          var surge = (waveCycle + 1.0) * 0.5;
+          var cycle = (t * 0.38 + band.phaseOffset / (Math.PI * 2)) % 1;
+          var envelope = THREE.MathUtils.smoothstep(cycle, 0.0, 0.10) * (1.0 - THREE.MathUtils.smoothstep(cycle, 0.24, 0.76));
 
           if (band.isIslet) {
-            var s = 0.95 + surge * 0.12;
-            band.mesh.scale.set(s, 1, s);
-            if (band.sampleX !== undefined) {
-              band.mesh.position.y = getWaveHeight(band.sampleX, band.sampleZ, t) + 0.08;
-            }
-            band.mat.opacity = band.baseOpacity * (0.45 + Math.sin(surge * Math.PI) * 0.55);
+            var scale = 0.96 + cycle * 0.16;
+            band.mesh.scale.set(scale, 1, scale);
+            band.mesh.position.y = getWaveHeight(band.sampleX, band.sampleZ, t) + 0.045;
+            band.mat.opacity = band.baseOpacity * envelope * 0.30;
             continue;
           }
 
           var posAttr = band.geo.attributes.position;
           var posArr = posAttr.array;
-          var metaList = band.meta;
-          var radialShift = -surge * 0.36;
-          var yLift = 0.065 + surge * 0.05;
-          var yOuter = yLift - 0.015;
-          var widthFactor = 0.75 + (1.0 - surge) * 0.35;
-
-          for (var i = 0; i < metaList.length; i++) {
-            var m = metaList[i];
-            var r0In = m.r0 + radialShift;
+          var radialShift = (1.0 - cycle) * (0.70 + Math.min(0.18, (amp - 1.0) * 0.12));
+          var widthFactor = 0.50 + Math.sin(cycle * Math.PI) * 0.42;
+          for (var i = 0; i < band.meta.length; i++) {
+            var m = band.meta[i];
+            var bend0 = Math.sin(i / band.meta.length * Math.PI * 12 - t * 0.32) * 0.065;
+            var bend1 = Math.sin((i + 1) / band.meta.length * Math.PI * 12 - t * 0.32) * 0.065;
+            var r0In = m.r0 + radialShift + bend0;
             var r0Out = r0In + m.width * widthFactor;
-            var r1In = m.r1 + radialShift;
+            var r1In = m.r1 + radialShift + bend1;
             var r1Out = r1In + m.width * widthFactor;
-
+            var x0In = m.c0 * r0In, z0In = m.s0 * r0In;
+            var x0Out = m.c0 * r0Out, z0Out = m.s0 * r0Out;
+            var x1In = m.c1 * r1In, z1In = m.s1 * r1In;
+            var x1Out = m.c1 * r1Out, z1Out = m.s1 * r1Out;
+            var y0In = getWaveHeight(x0In, z0In, t) + 0.035;
+            var y0Out = getWaveHeight(x0Out, z0Out, t) + 0.035;
+            var y1In = getWaveHeight(x1In, z1In, t) + 0.035;
+            var y1Out = getWaveHeight(x1Out, z1Out, t) + 0.035;
             var p = i * 18;
-            posArr[p] = m.c0 * r0In; posArr[p + 1] = yLift; posArr[p + 2] = m.s0 * r0In;
-            posArr[p + 3] = m.c1 * r1Out; posArr[p + 4] = yOuter; posArr[p + 5] = m.s1 * r1Out;
-            posArr[p + 6] = m.c0 * r0Out; posArr[p + 7] = yOuter; posArr[p + 8] = m.s0 * r0Out;
-
-            posArr[p + 9] = m.c0 * r0In; posArr[p + 10] = yLift; posArr[p + 11] = m.s0 * r0In;
-            posArr[p + 12] = m.c1 * r1In; posArr[p + 13] = yLift; posArr[p + 14] = m.s1 * r1In;
-            posArr[p + 15] = m.c1 * r1Out; posArr[p + 16] = yOuter; posArr[p + 17] = m.s1 * r1Out;
+            posArr[p] = x0In; posArr[p + 1] = y0In; posArr[p + 2] = z0In;
+            posArr[p + 3] = x1Out; posArr[p + 4] = y1Out; posArr[p + 5] = z1Out;
+            posArr[p + 6] = x0Out; posArr[p + 7] = y0Out; posArr[p + 8] = z0Out;
+            posArr[p + 9] = x0In; posArr[p + 10] = y0In; posArr[p + 11] = z0In;
+            posArr[p + 12] = x1In; posArr[p + 13] = y1In; posArr[p + 14] = z1In;
+            posArr[p + 15] = x1Out; posArr[p + 16] = y1Out; posArr[p + 17] = z1Out;
           }
-
           posAttr.needsUpdate = true;
-          band.mat.opacity = band.baseOpacity * (0.38 + Math.sin(surge * Math.PI) * 0.62);
-        }
-
-        var glintMul = weatherCurrent ? weatherCurrent.glintOpacityMul : 1.0;
-        for (var g = 0; g < glintRibbons.length; g++) {
-          var gl = glintRibbons[g];
-          var dObj = gl.dummy;
-          var list = gl.items;
-          for (var gi = 0; gi < list.length; gi++) {
-            var it = list[gi];
-            var wy = getWaveHeight(it.sampleX, it.sampleZ, t);
-            dObj.position.set(0, wy + 0.035, 0);
-            dObj.rotation.set(0, it.baseAngle + Math.sin(t * 0.35 + it.phase) * 0.08, 0);
-            dObj.scale.set(it.r, 1, it.r);
-            dObj.updateMatrix();
-            gl.instMesh.setMatrixAt(gi, dObj.matrix);
-          }
-          gl.instMesh.instanceMatrix.needsUpdate = true;
-          gl.mat.opacity = (0.18 + (Math.sin(t * 2.2 + gl.phase) + 1.0) * 0.2) * glintMul;
+          band.mat.opacity = band.baseOpacity;
         }
       }
 
