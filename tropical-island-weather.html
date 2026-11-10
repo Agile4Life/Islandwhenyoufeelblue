@@ -3,18 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Tropical Island — 3D Isometric Diorama</title>
+  <title>Island When You Feel Blue — Đảo nhiệt đới 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg-dark: #07223b;
-      --panel-bg: rgba(10, 25, 42, 0.76);
-      --panel-border: rgba(102, 224, 214, 0.28);
-      --accent-turquoise: #38e4d4;
-      --accent-sand: #f4d186;
-      --accent-coral: #ff6b5b;
-      --text-main: #f2f7fa;
-      --text-muted: #9cb3c9;
+      --glass: rgba(9, 18, 32, 0.42);
+      --glass-strong: rgba(9, 18, 32, 0.62);
+      --hairline: rgba(255, 255, 255, 0.14);
+      --text-main: #f6f3ee;
+      --text-muted: rgba(246, 243, 238, 0.66);
+      --accent: #5fe6d6;
+      --accent-soft: rgba(95, 230, 214, 0.16);
+      --font-ui: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-display: "Cormorant Garamond", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
     }
+
+    body[data-weather="sunset"] { --accent: #ffb469; --accent-soft: rgba(255, 170, 96, 0.18); }
+    body[data-weather="rain"] { --accent: #9fd4ee; --accent-soft: rgba(159, 212, 238, 0.16); }
+    body[data-weather="storm"] { --accent: #b9c4ff; --accent-soft: rgba(185, 196, 255, 0.16); }
 
     * {
       box-sizing: border-box;
@@ -22,6 +32,7 @@
       padding: 0;
       user-select: none;
       -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     html, body {
@@ -29,8 +40,9 @@
       height: 100%;
       overflow: hidden;
       background-color: var(--bg-dark);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: var(--font-ui);
       color: var(--text-main);
+      transition: background-color 1.2s ease;
     }
 
     #canvas-container {
@@ -46,442 +58,426 @@
       width: 100%;
       height: 100%;
       outline: none;
+      touch-action: none;
     }
 
-    /* Giao diện HUD tối giản */
+    /* Màn chuyển cảnh lúc tải */
+    .veil {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: radial-gradient(120% 90% at 50% 40%, #12284a 0%, #050b18 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      transition: opacity 1.6s ease 0.15s, visibility 0s linear 1.8s;
+      pointer-events: none;
+    }
+    .veil span {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 22px;
+      letter-spacing: 0.04em;
+      color: rgba(246, 243, 238, 0.72);
+      animation: veilPulse 1.8s ease-in-out infinite;
+    }
+    body.ready .veil { opacity: 0; visibility: hidden; }
+    @keyframes veilPulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+    .hud {
+      transition: opacity 0.6s ease, transform 0.6s var(--ease);
+    }
+    body.ui-hidden .hud {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Tiêu đề */
     .hud-header {
       position: fixed;
-      top: 24px;
-      left: 28px;
+      top: clamp(18px, 3.2vh, 34px);
+      left: clamp(18px, 2.6vw, 40px);
       z-index: 10;
       pointer-events: none;
-      max-width: calc(100vw - 56px);
+      max-width: min(440px, calc(100vw - 36px));
+      text-shadow: 0 1px 18px rgba(4, 10, 24, 0.55);
     }
-
-    .hud-badge {
+    .hud-eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(56, 228, 212, 0.14);
-      border: 1px solid rgba(56, 228, 212, 0.35);
-      color: var(--accent-turquoise);
+      gap: 9px;
       font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
+      font-weight: 600;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
-      margin-bottom: 8px;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      color: var(--accent);
+      transition: color 1s ease;
     }
-
-    .hud-badge-dot {
+    .hud-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--accent-turquoise);
-      box-shadow: 0 0 8px var(--accent-turquoise);
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+      transition: background 1s ease, box-shadow 1s ease;
     }
-
+    .hud-sep {
+      width: 18px;
+      height: 1px;
+      background: currentColor;
+      opacity: 0.45;
+    }
     .hud-fps {
-      padding-left: 7px;
-      margin-left: 2px;
-      border-left: 1px solid rgba(56, 228, 212, 0.32);
-      color: var(--text-main);
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-      opacity: 0.9;
-    }
-
-    .hud-title {
-      font-size: clamp(20px, 3vw, 28px);
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-main);
-      text-shadow: 0 2px 6px rgba(4, 15, 28, 0.72), 0 4px 18px rgba(0, 0, 0, 0.55);
-      line-height: 1.15;
-    }
-
-    .hud-subtitle {
-      margin-top: 4px;
-      font-size: clamp(12px, 1.6vw, 13.5px);
-      color: #cfe2f2;
+      color: var(--text-muted);
       font-weight: 500;
-      letter-spacing: 0.02em;
-      text-shadow: 0 1px 4px rgba(4, 15, 28, 0.85), 0 3px 12px rgba(4, 15, 28, 0.72);
+      letter-spacing: 0.1em;
+      font-variant-numeric: tabular-nums;
+    }
+    .hud-title {
+      margin-top: 8px;
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: clamp(30px, 3.5vw, 50px);
+      line-height: 1.0;
+      letter-spacing: 0.005em;
+      color: #fffaf2;
+    }
+    .hud-title em {
+      display: block;
+      font-style: italic;
+      font-size: 0.72em;
+      color: rgba(255, 250, 242, 0.86);
+    }
+    .hud-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text-muted);
+      max-width: 34ch;
+      transition: opacity 0.5s ease;
     }
 
-    /* Cụm nút điều khiển */
+    /* Cụm nút góc phải */
     .hud-controls {
       position: fixed;
-      top: 24px;
-      right: 28px;
-      z-index: 10;
+      top: clamp(18px, 3.2vh, 34px);
+      right: clamp(18px, 2.6vw, 40px);
+      z-index: 12;
       display: flex;
       gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      padding: 6px;
+      border-radius: 999px;
+      background: var(--glass);
+      border: 1px solid var(--hairline);
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      box-shadow: 0 10px 34px rgba(3, 8, 20, 0.28);
     }
-
     .ctrl-btn {
-      appearance: none;
-      border: 1px solid var(--panel-border);
-      background: var(--panel-bg);
-      color: var(--text-main);
-      padding: 9px 14px;
-      border-radius: 10px;
-      font-size: 12.5px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      transition: transform 0.16s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-    }
-
-    .ctrl-btn:hover {
-      background: rgba(28, 42, 58, 0.88);
-      border-color: rgba(56, 228, 212, 0.55);
-      transform: translateY(-1px);
-    }
-
-    .ctrl-btn:active {
-      transform: translateY(0);
-    }
-
-    .ctrl-btn.active {
-      background: rgba(56, 228, 212, 0.18);
-      border-color: var(--accent-turquoise);
-      color: var(--accent-turquoise);
-      box-shadow: 0 0 18px rgba(56, 228, 212, 0.18), 0 6px 20px rgba(0, 0, 0, 0.28);
-    }
-
-    .ctrl-btn.paused {
-      background: rgba(255, 107, 91, 0.18);
-      border-color: var(--accent-coral);
-      color: #ff9c90;
-    }
-
-    .btn-indicator {
-      width: 7px;
-      height: 7px;
+      position: relative;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
-      background: var(--text-muted);
-      transition: background 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .ctrl-btn.active .btn-indicator {
-      background: var(--accent-turquoise);
-      box-shadow: 0 0 8px var(--accent-turquoise);
-    }
-
-    .ctrl-btn.paused .btn-indicator {
-      background: var(--accent-coral);
-      box-shadow: 0 0 8px var(--accent-coral);
-    }
-
-    /* Thanh chọn thời tiết */
-    .weather-bar {
-      position: fixed;
-      top: 72px;
-      right: 28px;
-      z-index: 10;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 4px;
-      border-radius: 12px;
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-    }
-
-    .weather-btn {
-      appearance: none;
-      border: 1px solid transparent;
+      border: 0;
       background: transparent;
-      color: var(--text-muted);
-      padding: 6px 11px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .weather-btn svg {
-      width: 14px;
-      height: 14px;
-      flex-shrink: 0;
-    }
-
-    .weather-btn:hover {
       color: var(--text-main);
-      background: rgba(255, 255, 255, 0.06);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: background 0.25s ease, color 0.25s ease, transform 0.25s var(--ease);
     }
-
-    .weather-btn.active {
-      color: var(--accent-turquoise);
-      background: rgba(56, 228, 212, 0.16);
-      border-color: rgba(56, 228, 212, 0.42);
-      box-shadow: 0 0 14px rgba(56, 228, 212, 0.15);
+    .ctrl-btn svg { width: 18px; height: 18px; }
+    .ctrl-btn:hover { background: rgba(255, 255, 255, 0.12); }
+    .ctrl-btn:active { transform: scale(0.92); }
+    .ctrl-btn:focus-visible, .weather-btn:focus-visible, .poi-close:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
-
-    .weather-btn[data-weather="sunset"].active {
-      color: #ffb076;
-      background: rgba(255, 138, 76, 0.18);
-      border-color: rgba(255, 160, 102, 0.48);
-      box-shadow: 0 0 14px rgba(255, 138, 76, 0.18);
+    .ctrl-btn.active, .ctrl-btn.paused {
+      background: var(--accent-soft);
+      color: var(--accent);
     }
-
-    .weather-btn[data-weather="rain"].active {
-      color: #8fd3ff;
-      background: rgba(110, 188, 255, 0.18);
-      border-color: rgba(132, 202, 255, 0.45);
-      box-shadow: 0 0 14px rgba(110, 188, 255, 0.16);
-    }
-
-    .weather-btn[data-weather="storm"].active {
-      color: #d6c2ff;
-      background: rgba(162, 130, 255, 0.2);
-      border-color: rgba(186, 158, 255, 0.48);
-      box-shadow: 0 0 14px rgba(162, 130, 255, 0.2);
-    }
-
-    /* Nhãn thông tin khi click vật thể */
-    .poi-card {
-      position: fixed;
-      bottom: 64px;
-      left: 50%;
-      transform: translateX(-50%) translateY(14px);
-      z-index: 12;
-      background: rgba(15, 23, 32, 0.88);
-      border: 1px solid rgba(244, 209, 134, 0.45);
-      border-radius: 14px;
-      padding: 12px 18px;
-      min-width: 260px;
-      max-width: min(90vw, 400px);
+    .ctrl-btn .ctrl-label {
+      position: absolute;
+      top: calc(100% + 12px);
+      right: 0;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--glass-strong);
+      border: 1px solid var(--hairline);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      color: var(--text-main);
+      font-size: 11.5px;
+      font-weight: 500;
+      white-space: nowrap;
       opacity: 0;
+      transform: translateY(-4px);
       pointer-events: none;
-      transition: opacity 0.24s ease, transform 0.24s ease;
+      transition: opacity 0.2s ease, transform 0.2s var(--ease);
     }
+    .ctrl-btn:hover .ctrl-label, .ctrl-btn:focus-visible .ctrl-label {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .ctrl-btn .ico-play { display: none; }
+    .ctrl-btn.paused .ico-play { display: block; }
+    .ctrl-btn.paused .ico-pause { display: none; }
+    #btn-cinema { transition: opacity 0.6s ease, background 0.25s ease; }
+    body.ui-hidden .hud-controls {
+      opacity: 1;
+      pointer-events: auto;
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    body.ui-hidden .hud-controls .ctrl-btn:not(#btn-cinema) { opacity: 0; pointer-events: none; }
+    body.ui-hidden #btn-cinema { opacity: 0.35; }
+    body.ui-hidden #btn-cinema:hover { opacity: 1; }
 
+    /* Thanh thời tiết */
+    .weather-bar {
+      position: fixed;
+      left: 50%;
+      bottom: clamp(18px, 4vh, 40px);
+      transform: translateX(-50%);
+      z-index: 12;
+      display: flex;
+      gap: 4px;
+      padding: 6px;
+      border-radius: 999px;
+      background: var(--glass);
+      border: 1px solid var(--hairline);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      box-shadow: 0 14px 44px rgba(3, 8, 20, 0.34);
+      max-width: calc(100vw - 24px);
+    }
+    body.ui-hidden .weather-bar { transform: translateX(-50%) translateY(14px); }
+    .weather-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 42px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
+    }
+    .weather-btn svg { width: 17px; height: 17px; flex: none; }
+    .weather-btn kbd {
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 5px;
+      border: 1px solid var(--hairline);
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+    .weather-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.08); }
+    .weather-btn.active {
+      color: #10131c;
+      background: var(--accent);
+      box-shadow: 0 6px 22px var(--accent-soft), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+    .weather-btn.active kbd { color: #10131c; border-color: rgba(16, 19, 28, 0.3); }
+
+    /* Thẻ điểm tham quan */
+    .poi-card {
+      position: fixed;
+      left: clamp(18px, 2.6vw, 40px);
+      bottom: clamp(18px, 4vh, 40px);
+      z-index: 14;
+      width: min(330px, calc(100vw - 36px));
+      padding: 16px 18px 18px;
+      border-radius: 18px;
+      background: var(--glass-strong);
+      border: 1px solid var(--hairline);
+      backdrop-filter: blur(22px) saturate(150%);
+      -webkit-backdrop-filter: blur(22px) saturate(150%);
+      box-shadow: 0 18px 50px rgba(3, 8, 20, 0.4);
+      opacity: 0;
+      transform: translateY(14px);
+      pointer-events: none;
+      transition: opacity 0.4s ease, transform 0.45s var(--ease);
+    }
     .poi-card.visible {
       opacity: 1;
-      transform: translateX(-50%) translateY(0);
+      transform: translateY(0);
       pointer-events: auto;
     }
-
+    body.ui-hidden .poi-card { opacity: 0; pointer-events: none; }
     .poi-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 4px;
     }
-
     .poi-title {
-      font-size: 13.5px;
-      font-weight: 700;
-      color: var(--accent-sand);
-      letter-spacing: 0.03em;
+      font-family: var(--font-display);
+      font-size: 23px;
+      font-weight: 500;
+      line-height: 1.15;
+      color: #fffaf2;
     }
-
     .poi-close {
-      background: none;
-      border: none;
+      flex: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--hairline);
+      background: transparent;
       color: var(--text-muted);
-      font-size: 16px;
+      font-size: 17px;
       line-height: 1;
       cursor: pointer;
-      padding: 2px 4px;
+      transition: background 0.2s ease, color 0.2s ease;
     }
-
-    .poi-close:hover {
-      color: var(--text-main);
-    }
-
+    .poi-close:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-main); }
     .poi-desc {
-      font-size: 12.5px;
-      color: var(--text-main);
-      line-height: 1.45;
-      opacity: 0.9;
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-muted);
     }
 
-    /* Thanh hướng dẫn dưới cùng */
     .hud-footer {
       position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
+      right: clamp(18px, 2.6vw, 40px);
+      bottom: clamp(22px, 4.6vh, 48px);
       z-index: 10;
-      pointer-events: none;
-      background: rgba(15, 22, 30, 0.68);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 7px 16px;
-      border-radius: 999px;
-      font-size: 12px;
+      font-size: 11.5px;
+      letter-spacing: 0.02em;
       color: var(--text-muted);
-      letter-spacing: 0.04em;
-      white-space: nowrap;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      text-align: right;
+      line-height: 1.7;
+      pointer-events: none;
+      text-shadow: 0 1px 12px rgba(4, 10, 24, 0.6);
     }
+    .hud-footer b { font-weight: 600; color: var(--text-main); }
 
-    /* Thông báo lỗi nếu không có WebGL */
     .error-overlay {
       position: fixed;
       inset: 0;
-      z-index: 100;
-      background: var(--bg-dark);
+      z-index: 60;
       display: none;
       align-items: center;
       justify-content: center;
       padding: 24px;
-      text-align: center;
+      background: rgba(4, 9, 20, 0.92);
     }
-
     .error-box {
       max-width: 440px;
-      background: rgba(24, 34, 46, 0.9);
-      border: 1px solid rgba(255, 107, 91, 0.4);
-      border-radius: 14px;
-      padding: 24px;
+      padding: 26px 28px;
+      border-radius: 18px;
+      background: var(--glass-strong);
+      border: 1px solid var(--hairline);
+      text-align: center;
     }
-
     .error-box h2 {
-      color: var(--accent-coral);
-      font-size: 18px;
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 500;
       margin-bottom: 10px;
     }
+    .error-box p { font-size: 14px; line-height: 1.6; color: var(--text-muted); }
 
-    .error-box p {
-      color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1.5;
+    @media (max-width: 900px) {
+      .hud-footer { display: none; }
+      .weather-btn kbd { display: none; }
     }
-
-    @media (max-width: 720px) {
-      .hud-header {
-        top: 14px;
-        left: 16px;
-        right: 16px;
-      }
-      .hud-badge {
-        font-size: 9.8px;
-        padding: 3px 9px;
-        gap: 6px;
-        letter-spacing: 0.08em;
-      }
-      .hud-controls {
-        top: auto;
-        bottom: 66px;
-        right: 50%;
-        transform: translateX(50%);
-        width: calc(100vw - 24px);
-        justify-content: center;
-      }
-      .weather-bar {
-        top: 120px;
-        left: 16px;
-        right: auto;
-        max-width: calc(100vw - 32px);
-        overflow-x: auto;
-      }
-      .weather-btn {
-        padding: 5px 9px;
-        font-size: 11px;
-      }
-      .ctrl-btn {
-        padding: 8px 11px;
-        font-size: 11.5px;
-      }
-      .poi-card {
-        bottom: 118px;
-      }
-      .hud-footer {
-        bottom: 12px;
-        font-size: 10.5px;
-        padding: 5px 12px;
-        width: calc(100vw - 24px);
-        max-width: 420px;
-        white-space: normal;
-        text-align: center;
-      }
+    @media (max-width: 560px) {
+      .hud-subtitle { display: none; }
+      .weather-btn { padding: 0 12px; height: 40px; font-size: 12px; gap: 6px; }
+      .ctrl-btn { width: 34px; height: 34px; }
+      .poi-card { bottom: 84px; }
+    }
+    @media (max-width: 400px) {
+      .weather-btn span { display: none; }
+      .weather-btn { padding: 0 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: 0.01s !important; animation: none !important; }
     }
   </style>
 </head>
 <body>
   <div id="canvas-container"></div>
+  <div class="veil" aria-hidden="true"><span>đang dựng hòn đảo…</span></div>
 
-  <header class="hud-header">
-    <div class="hud-badge">
-      <span class="hud-badge-dot"></span>
-      <span id="hud-weather-badge">Isometric 3D Diorama &middot; Sunny</span>
+  <header class="hud hud-header">
+    <div class="hud-eyebrow">
+      <span class="hud-dot"></span>
+      <span id="hud-weather-badge">Nắng đẹp</span>
+      <span class="hud-sep"></span>
       <span id="hud-fps" class="hud-fps">60 FPS</span>
     </div>
-    <h1 class="hud-title">TROPICAL ISLAND</h1>
-    <p class="hud-subtitle">Low-poly stylized archipelago &middot; Interactive procedural ecosystem</p>
+    <h1 class="hud-title">Island <em>when you feel blue</em></h1>
+    <p id="hud-mood" class="hud-subtitle">Trưa nhiệt đới trong vắt — nước ngọc lam, gió nhẹ và nắng tràn mặt vịnh.</p>
   </header>
 
-  <nav class="hud-controls" aria-label="Scene Controls">
-    <button id="btn-reset" class="ctrl-btn" type="button" title="Reset camera to default isometric view">
-      <span>Reset Camera</span>
+  <nav class="hud hud-controls" aria-label="Điều khiển cảnh">
+    <button id="btn-reset" class="ctrl-btn" type="button" aria-label="Đặt lại góc nhìn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      <span class="ctrl-label">Đặt lại góc nhìn</span>
     </button>
-    <button id="btn-autorotate" class="ctrl-btn active" type="button" title="Toggle automatic island rotation">
-      <span class="btn-indicator"></span>
-      <span id="label-autorotate">Auto Rotate: ON</span>
+    <button id="btn-autorotate" class="ctrl-btn active" type="button" aria-label="Tự xoay">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="12" rx="9" ry="3.6"/><path d="M12 3c2.6 2.4 3.9 5.4 3.9 9s-1.3 6.600-3.9 9c-2.600-2.400-3.900-5.400-3.900-9s1.300-6.600 3.900-9z"/></svg>
+      <span id="label-autorotate" class="ctrl-label">Tự xoay: Bật</span>
     </button>
-    <button id="btn-pause" class="ctrl-btn" type="button" title="Pause or resume procedural animations">
-      <span class="btn-indicator"></span>
-      <span id="label-pause">Pause</span>
+    <button id="btn-pause" class="ctrl-btn" type="button" aria-label="Tạm dừng chuyển động">
+      <svg class="ico-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg>
+      <svg class="ico-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.500z"/></svg>
+      <span id="label-pause" class="ctrl-label">Tạm dừng</span>
+    </button>
+    <button id="btn-cinema" class="ctrl-btn" type="button" aria-label="Ẩn hoặc hiện giao diện">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.800"/></svg>
+      <span class="ctrl-label">Ẩn / hiện giao diện (H)</span>
     </button>
   </nav>
 
-  <div class="weather-bar" role="group" aria-label="Weather Modes">
+  <div class="hud weather-bar" role="group" aria-label="Chế độ thời tiết">
     <button class="weather-btn active" type="button" data-weather="sunny" aria-pressed="true" title="Nắng đẹp nhiệt đới (Phím 1)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.93 4.93l1.77 1.77M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07l1.77-1.77M17.3 6.7l1.77-1.77"/></svg>
-      <span>Nắng đẹp</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.500M12 19.500V22M4.930 4.930l1.770 1.770M17.300 17.300l1.770 1.770M2 12h2.500M19.500 12H22M4.930 19.070l1.770-1.770M17.300 6.700l1.770-1.770"/></svg>
+      <span>Nắng đẹp</span><kbd>1</kbd>
     </button>
     <button class="weather-btn" type="button" data-weather="sunset" aria-pressed="false" title="Hoàng hôn (Phím 2)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 17a5 5 0 0 0-10 0"/><path d="M12 4v3M4.22 9.22l1.77 1.77M19.78 9.22l-1.77 1.77M2 17h20M5 21h14"/></svg>
-      <span>Hoàng hôn</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 17a5 5 0 0 0-10 0"/><path d="M12 4v3M4.220 9.220l1.770 1.770M19.780 9.220l-1.770 1.770M2 17h20M5 21h14"/></svg>
+      <span>Hoàng hôn</span><kbd>2</kbd>
     </button>
     <button class="weather-btn" type="button" data-weather="rain" aria-pressed="false" title="Mưa rào nhiệt đới (Phím 3)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 15.5A4.5 4.5 0 0 0 17.5 7a6 6 0 0 0-11.6 1.5A4 4 0 0 0 6 16.5h13"/><path d="M8 19l-1 2.5M12 19l-1 2.5M16 19l-1 2.5"/></svg>
-      <span>Mưa rào</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 15.500A4.500 4.500 0 0 0 17.500 7a6 6 0 0 0-11.600 1.500A4 4 0 0 0 6 16.500h13"/><path d="M8 19l-1 2.500M12 19l-1 2.500M16 19l-1 2.500"/></svg>
+      <span>Mưa rào</span><kbd>3</kbd>
     </button>
     <button class="weather-btn" type="button" data-weather="storm" aria-pressed="false" title="Giông bão đêm (Phím 4)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 15.2A4.5 4.5 0 0 0 17.5 7a6 6 0 0 0-11.6 1.5A4 4 0 0 0 6 16.5h3"/><path d="M13 13l-2.5 4.5h4L12 22"/></svg>
-      <span>Giông bão</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 15.200A4.500 4.500 0 0 0 17.500 7a6 6 0 0 0-11.600 1.500A4 4 0 0 0 6 16.500h3"/><path d="M13 13l-2.500 4.500h4L12 22"/></svg>
+      <span>Giông bão</span><kbd>4</kbd>
     </button>
   </div>
 
   <aside id="poi-card" class="poi-card" role="status" aria-live="polite">
     <div class="poi-header">
       <span id="poi-title" class="poi-title">Landmark</span>
-      <button id="poi-close" class="poi-close" type="button" aria-label="Close">&times;</button>
+      <button id="poi-close" class="poi-close" type="button" aria-label="Đóng">&times;</button>
     </div>
     <p id="poi-desc" class="poi-desc"></p>
   </aside>
 
-  <div class="hud-footer">
-    Drag to rotate &middot; Scroll to zoom &middot; Click landmarks &middot; Keys 1&ndash;4 weather
+  <div class="hud hud-footer">
+    <b>Kéo</b> để xoay &middot; <b>Cuộn</b> để phóng to &middot; <b>Chạm</b> vào cảnh vật<br />
+    Phím <b>1&ndash;4</b> đổi thời tiết &middot; <b>H</b> ẩn giao diện
   </div>
 
   <div id="error-overlay" class="error-overlay">
@@ -557,7 +553,9 @@
         sunLat: -6.2,
         horizonYCam: 9.83,
         skyBackdrop: null,
-        skyMat: null
+        skyMat: null,
+        lastAzimuth: null,
+        skyScroll: 0.0
       };
       var oceanSunUniforms = {
         uTime: { value: 0 },
@@ -570,13 +568,432 @@
         uLightningPulse: { value: 0.0 },
         uSunCoreColor: { value: new THREE.Color(0xfffef2) },
         uSunRoadColor: { value: new THREE.Color(0xffd875) },
-        uWaterRippleStrength: { value: 1.0 }
+        uWaterRippleStrength: { value: 1.0 },
+        uHorizonFwd: { value: 27.6 },
+        uWaterGlow: { value: 1.0 },
+        uChop: { value: 1.0 }
       };
       var movingBoats = [];
       var boatWakeInst = null;
       var boatWakeList = [];
       var movingPeople = [];
       var peopleInstRefs = null;
+
+      // ==========================================
+      // BẦU TRỜI THỦ TỤC DÙNG CHUNG (bầu trời vẽ & mặt biển phản chiếu cùng một hàm màu)
+      // ==========================================
+      var skyUniforms = {
+        uTime: { value: 0 },
+        uHorizonY: { value: 9.83 },
+        uTopY: { value: 16.5 },
+        uSunPosLocal: { value: new THREE.Vector2(-6.2, 12.5) },
+        uSunVis: { value: 1.0 },
+        uSunSize: { value: 1.0 },
+        uSunsetFactor: { value: 0.0 },
+        uLightningPulse: { value: 0.0 },
+        uSkyScroll: { value: 0.0 },
+        uCloudCover: { value: 0.42 },
+        uOvercast: { value: 0.0 },
+        uStarVis: { value: 0.0 },
+        uZenithCol: { value: new THREE.Color(0x2f78b8).convertSRGBToLinear() },
+        uMidSkyCol: { value: new THREE.Color(0x7fb8dc).convertSRGBToLinear() },
+        uHorizonCol: { value: new THREE.Color(0xd6ebee).convertSRGBToLinear() },
+        uSunAureoleCol: { value: new THREE.Color(0xffe9c6).convertSRGBToLinear() },
+        uCoreCol: { value: new THREE.Color(0xfffbef).convertSRGBToLinear() },
+        uRimCol: { value: new THREE.Color(0xffe4b7).convertSRGBToLinear() }
+      };
+
+      var GLSL_SKY_UNIFORMS = [
+        'uniform float uHorizonY;',
+        'uniform vec2 uSunPosLocal;',
+        'uniform float uSunVis;',
+        'uniform float uSunsetFactor;',
+        'uniform vec3 uZenithCol;',
+        'uniform vec3 uMidSkyCol;',
+        'uniform vec3 uHorizonCol;',
+        'uniform vec3 uSunAureoleCol;'
+      ].join('\n');
+
+      var GLSL_NOISE = [
+        'float hash21(vec2 p) {',
+        '  p = fract(p * vec2(123.34, 456.21));',
+        '  p += dot(p, p + 45.32);',
+        '  return fract(p.x * p.y);',
+        '}',
+        'float vnoise(vec2 p) {',
+        '  vec2 i = floor(p);',
+        '  vec2 f = fract(p);',
+        '  vec2 u = f * f * (3.0 - 2.0 * f);',
+        '  return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), u.x),',
+        '             mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), u.x), u.y);',
+        '}',
+        'float fbm(vec2 p) {',
+        '  float a = 0.5;',
+        '  float s = 0.0;',
+        '  for (int i = 0; i < 4; i++) {',
+        '    s += a * vnoise(p);',
+        '    p = p * 2.03 + vec2(17.1, 3.7);',
+        '    a *= 0.5;',
+        '  }',
+        '  return s;',
+        '}'
+      ].join('\n');
+
+      // Màu nền trời tại (x ngang theo camera, y = độ cao trên đường chân trời) — chưa gồm đĩa mặt trời & mây.
+      var GLSL_SKY_GRADIENT = [
+        'vec3 skyGradient(float x, float y) {',
+        '  float sf = uSunsetFactor;',
+        '  float h = clamp(y / 11.0, 0.0, 1.0);',
+        '  vec3 col = mix(uHorizonCol, uMidSkyCol, smoothstep(0.0, 0.40, h));',
+        '  col = mix(col, uZenithCol, smoothstep(0.26, 1.0, h));',
+        '  float dx = x - uSunPosLocal.x;',
+        '  float dy = y - (uSunPosLocal.y - uHorizonY);',
+        '  float away = 1.0 - exp(-dx * dx / 820.0);',
+        '  vec3 venus = col * vec3(0.74, 0.60, 0.92) + vec3(0.012, 0.0, 0.035);',
+        '  col = mix(col, venus, away * sf * 0.8 * (1.0 - h * 0.45));',
+        '  float wide = exp(-(dx * dx) / mix(150.0, 380.0, sf) - (dy * dy) / mix(26.0, 30.0, sf));',
+        '  col += uSunAureoleCol * wide * mix(0.20, 0.36, sf) * uSunVis;',
+        '  float band = exp(-max(y, 0.0) / mix(1.7, 1.15, sf)) * exp(-dx * dx / mix(520.0, 1000.0, sf));',
+        '  col += uSunAureoleCol * vec3(1.0, 0.60, 0.34) * band * mix(0.08, 0.40, sf) * uSunVis;',
+        '  return col;',
+        '}'
+      ].join('\n');
+
+      // ==========================================
+      // HẬU KỲ HDR: MSAA nửa-float, bloom đa tầng, tia nắng xuyên, ACES, chỉnh màu, dither
+      // ==========================================
+      var postFX = {
+        enabled: false,
+        sceneRT: null,
+        down: [],
+        up: [],
+        raysRT: null,
+        quad: null,
+        cam: null,
+        scene: null,
+        mats: {},
+        levels: 6,
+        ratio: 1,
+        lowFpsCount: 0,
+        sunNdc: new THREE.Vector3()
+      };
+
+      function initPostFX() {
+        try {
+          if (!renderer.capabilities.isWebGL2) return;
+          var gl = renderer.getContext();
+          if (!gl.getExtension('EXT_color_buffer_float')) return;
+          if (typeof THREE.WebGLMultisampleRenderTarget === 'undefined') return;
+
+          var size = renderer.getDrawingBufferSize(new THREE.Vector2());
+          var hdrOpts = {
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.LinearFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.HalfFloatType,
+            depthBuffer: true,
+            stencilBuffer: false
+          };
+          postFX.sceneRT = new THREE.WebGLMultisampleRenderTarget(size.x, size.y, hdrOpts);
+          postFX.sceneRT.samples = Math.min(4, renderer.capabilities.maxSamples || 4);
+
+          var chainOpts = {
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.LinearFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.HalfFloatType,
+            depthBuffer: false,
+            stencilBuffer: false
+          };
+          for (var i = 0; i < postFX.levels; i++) {
+            postFX.down.push(new THREE.WebGLRenderTarget(4, 4, chainOpts));
+            postFX.up.push(new THREE.WebGLRenderTarget(4, 4, chainOpts));
+          }
+          postFX.raysRT = new THREE.WebGLRenderTarget(4, 4, chainOpts);
+
+          var vert = 'varying vec2 vUv;\nvoid main() {\n  vUv = uv;\n  gl_Position = vec4(position.xy, 0.0, 1.0);\n}';
+          function makePass(uniforms, frag) {
+            return new THREE.ShaderMaterial({
+              uniforms: uniforms,
+              vertexShader: vert,
+              fragmentShader: frag,
+              depthTest: false,
+              depthWrite: false,
+              toneMapped: false
+            });
+          }
+
+          postFX.mats.prefilter = makePass(
+            { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.0 }, uKnee: { value: 0.5 } },
+            [
+              'uniform sampler2D tSrc;',
+              'uniform vec2 uTexel;',
+              'uniform float uThreshold;',
+              'uniform float uKnee;',
+              'varying vec2 vUv;',
+              'float karis(vec3 c) { return 1.0 / (1.0 + max(c.r, max(c.g, c.b))); }',
+              'void main() {',
+              '  vec4 o = uTexel.xyxy * vec4(-1.0, -1.0, 1.0, 1.0);',
+              '  vec3 a = min(texture2D(tSrc, vUv + o.xy).rgb, vec3(48.0));',
+              '  vec3 b = min(texture2D(tSrc, vUv + o.zy).rgb, vec3(48.0));',
+              '  vec3 c = min(texture2D(tSrc, vUv + o.xw).rgb, vec3(48.0));',
+              '  vec3 d = min(texture2D(tSrc, vUv + o.zw).rgb, vec3(48.0));',
+              '  float wa = karis(a); float wb = karis(b); float wc = karis(c); float wd = karis(d);',
+              '  vec3 col = (a * wa + b * wb + c * wc + d * wd) / (wa + wb + wc + wd);',
+              '  float br = max(col.r, max(col.g, col.b));',
+              '  float soft = clamp(br - uThreshold + uKnee, 0.0, 2.0 * uKnee);',
+              '  soft = soft * soft / (4.0 * uKnee + 0.0001);',
+              '  float contrib = max(soft, br - uThreshold) / max(br, 0.0001);',
+              '  gl_FragColor = vec4(max(col * contrib, vec3(0.0)), 1.0);',
+              '}'
+            ].join('\n')
+          );
+
+          postFX.mats.down = makePass(
+            { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() } },
+            [
+              'uniform sampler2D tSrc;',
+              'uniform vec2 uTexel;',
+              'varying vec2 vUv;',
+              'void main() {',
+              '  vec2 t = uTexel;',
+              '  vec3 a = texture2D(tSrc, vUv + t * vec2(-2.0, -2.0)).rgb;',
+              '  vec3 b = texture2D(tSrc, vUv + t * vec2( 0.0, -2.0)).rgb;',
+              '  vec3 c = texture2D(tSrc, vUv + t * vec2( 2.0, -2.0)).rgb;',
+              '  vec3 d = texture2D(tSrc, vUv + t * vec2(-2.0,  0.0)).rgb;',
+              '  vec3 e = texture2D(tSrc, vUv).rgb;',
+              '  vec3 f = texture2D(tSrc, vUv + t * vec2( 2.0,  0.0)).rgb;',
+              '  vec3 g = texture2D(tSrc, vUv + t * vec2(-2.0,  2.0)).rgb;',
+              '  vec3 h = texture2D(tSrc, vUv + t * vec2( 0.0,  2.0)).rgb;',
+              '  vec3 i = texture2D(tSrc, vUv + t * vec2( 2.0,  2.0)).rgb;',
+              '  vec3 j = texture2D(tSrc, vUv + t * vec2(-1.0, -1.0)).rgb;',
+              '  vec3 k = texture2D(tSrc, vUv + t * vec2( 1.0, -1.0)).rgb;',
+              '  vec3 l = texture2D(tSrc, vUv + t * vec2(-1.0,  1.0)).rgb;',
+              '  vec3 m = texture2D(tSrc, vUv + t * vec2( 1.0,  1.0)).rgb;',
+              '  vec3 col = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + k + l + m) * 0.125;',
+              '  gl_FragColor = vec4(col, 1.0);',
+              '}'
+            ].join('\n')
+          );
+
+          postFX.mats.up = makePass(
+            { tSrc: { value: null }, tBase: { value: null }, uTexel: { value: new THREE.Vector2() } },
+            [
+              'uniform sampler2D tSrc;',
+              'uniform sampler2D tBase;',
+              'uniform vec2 uTexel;',
+              'varying vec2 vUv;',
+              'void main() {',
+              '  vec2 t = uTexel;',
+              '  vec3 s = texture2D(tSrc, vUv).rgb * 4.0;',
+              '  s += (texture2D(tSrc, vUv + vec2(-t.x, 0.0)).rgb + texture2D(tSrc, vUv + vec2(t.x, 0.0)).rgb +',
+              '        texture2D(tSrc, vUv + vec2(0.0, -t.y)).rgb + texture2D(tSrc, vUv + vec2(0.0, t.y)).rgb) * 2.0;',
+              '  s += texture2D(tSrc, vUv + vec2(-t.x, -t.y)).rgb + texture2D(tSrc, vUv + vec2(t.x, -t.y)).rgb +',
+              '       texture2D(tSrc, vUv + vec2(-t.x, t.y)).rgb + texture2D(tSrc, vUv + vec2(t.x, t.y)).rgb;',
+              '  gl_FragColor = vec4(texture2D(tBase, vUv).rgb + s / 16.0, 1.0);',
+              '}'
+            ].join('\n')
+          );
+
+          postFX.mats.rays = makePass(
+            { tSrc: { value: null }, uSunUv: { value: new THREE.Vector2(0.5, 0.8) } },
+            [
+              'uniform sampler2D tSrc;',
+              'uniform vec2 uSunUv;',
+              'varying vec2 vUv;',
+              'float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }',
+              'void main() {',
+              '  vec2 stepv = (uSunUv - vUv) / 28.0 * 0.92;',
+              '  vec2 uv = vUv + stepv * hash12(gl_FragCoord.xy);',
+              '  vec3 acc = vec3(0.0);',
+              '  float w = 1.0;',
+              '  for (int i = 0; i < 28; i++) {',
+              '    acc += texture2D(tSrc, clamp(uv, vec2(0.001), vec2(0.999))).rgb * w;',
+              '    w *= 0.95;',
+              '    uv += stepv;',
+              '  }',
+              '  gl_FragColor = vec4(acc / 28.0, 1.0);',
+              '}'
+            ].join('\n')
+          );
+
+          postFX.mats.final = makePass(
+            {
+              tScene: { value: null },
+              tBloom: { value: null },
+              tRays: { value: null },
+              uExposure: { value: 1.0 },
+              uBloom: { value: 0.1 },
+              uRays: { value: 0.0 },
+              uGrade: { value: 0.0 },
+              uVignette: { value: 0.5 },
+              uTime: { value: 0.0 }
+            },
+            [
+              'uniform sampler2D tScene;',
+              'uniform sampler2D tBloom;',
+              'uniform sampler2D tRays;',
+              'uniform float uExposure;',
+              'uniform float uBloom;',
+              'uniform float uRays;',
+              'uniform float uGrade;',
+              'uniform float uVignette;',
+              'uniform float uTime;',
+              'varying vec2 vUv;',
+              'float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }',
+              'vec3 RRTAndODTFit(vec3 v) {',
+              '  vec3 a = v * (v + 0.0245786) - 0.000090537;',
+              '  vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;',
+              '  return a / b;',
+              '}',
+              'vec3 acesFilm(vec3 color) {',
+              '  const mat3 inM = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));',
+              '  const mat3 outM = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));',
+              '  color *= uExposure / 0.6;',
+              '  color = inM * color;',
+              '  color = RRTAndODTFit(color);',
+              '  color = outM * color;',
+              '  return clamp(color, 0.0, 1.0);',
+              '}',
+              'void main() {',
+              '  vec3 c = texture2D(tScene, vUv).rgb;',
+              '  c += texture2D(tBloom, vUv).rgb * uBloom;',
+              '  c += texture2D(tRays, vUv).rgb * uRays;',
+              '  vec2 q = vUv - 0.5;',
+              '  c *= 1.0 - smoothstep(0.18, 0.95, dot(q, q) * 2.0) * uVignette;',
+              '  c = acesFilm(max(c, vec3(0.0)));',
+              '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+              '  c = mix(vec3(l), c, 1.06 + 0.10 * uGrade);',
+              '  c += (vec3(0.012, -0.004, 0.034) * (1.0 - smoothstep(0.0, 0.45, l)) + vec3(0.026, 0.006, -0.018) * smoothstep(0.45, 1.0, l)) * uGrade;',
+              '  c = clamp(c, 0.0, 1.0);',
+              '  c = mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));',
+              '  c += (hash12(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0 * 1.6;',
+              '  gl_FragColor = vec4(c, 1.0);',
+              '}'
+            ].join('\n')
+          );
+
+          postFX.scene = new THREE.Scene();
+          postFX.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+          postFX.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postFX.mats.final);
+          postFX.quad.frustumCulled = false;
+          postFX.scene.add(postFX.quad);
+
+          renderer.toneMapping = THREE.NoToneMapping;
+          postFX.enabled = true;
+          resizePostFX();
+        } catch (err) {
+          console.warn('PostFX disabled:', err);
+          postFX.enabled = false;
+          renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        }
+      }
+
+      function resizePostFX() {
+        if (!postFX.enabled) return;
+        var size = renderer.getDrawingBufferSize(new THREE.Vector2());
+        postFX.sceneRT.setSize(size.x, size.y);
+        var w = size.x;
+        var h = size.y;
+        for (var i = 0; i < postFX.levels; i++) {
+          w = Math.max(2, Math.floor(w / 2));
+          h = Math.max(2, Math.floor(h / 2));
+          postFX.down[i].setSize(w, h);
+          postFX.up[i].setSize(w, h);
+          if (i === 1) postFX.raysRT.setSize(w, h);
+        }
+      }
+
+      function runPass(mat, target) {
+        postFX.quad.material = mat;
+        renderer.setRenderTarget(target);
+        renderer.render(postFX.scene, postFX.cam);
+      }
+
+      function renderFrame() {
+        if (!postFX.enabled) {
+          renderer.render(scene, camera);
+          return;
+        }
+        var m = postFX.mats;
+        var n = postFX.levels;
+        var sf = celestialSunState.sunsetFactor;
+        var sunVis = skyUniforms.uSunVis.value;
+
+        renderer.setRenderTarget(postFX.sceneRT);
+        renderer.render(scene, camera);
+        var drawCalls = renderer.info.render.calls;
+        var drawTris = renderer.info.render.triangles;
+
+        m.prefilter.uniforms.tSrc.value = postFX.sceneRT.texture;
+        m.prefilter.uniforms.uTexel.value.set(0.5 / postFX.down[0].width, 0.5 / postFX.down[0].height);
+        m.prefilter.uniforms.uThreshold.value = THREE.MathUtils.lerp(1.15, 0.92, sf);
+        runPass(m.prefilter, postFX.down[0]);
+
+        for (var i = 1; i < n; i++) {
+          m.down.uniforms.tSrc.value = postFX.down[i - 1].texture;
+          m.down.uniforms.uTexel.value.set(1.0 / postFX.down[i - 1].width, 1.0 / postFX.down[i - 1].height);
+          runPass(m.down, postFX.down[i]);
+        }
+
+        var src = postFX.down[n - 1];
+        for (var j = n - 2; j >= 0; j--) {
+          m.up.uniforms.tSrc.value = src.texture;
+          m.up.uniforms.tBase.value = postFX.down[j].texture;
+          m.up.uniforms.uTexel.value.set(1.0 / src.width, 1.0 / src.height);
+          runPass(m.up, postFX.up[j]);
+          src = postFX.up[j];
+        }
+
+        postFX.sunNdc.copy(celestialSunState.worldPos).project(camera);
+        var raysStrength = sunVis * THREE.MathUtils.lerp(0.08, 0.22, sf);
+        m.rays.uniforms.tSrc.value = postFX.down[1].texture;
+        m.rays.uniforms.uSunUv.value.set(postFX.sunNdc.x * 0.5 + 0.5, postFX.sunNdc.y * 0.5 + 0.5);
+        runPass(m.rays, postFX.raysRT);
+
+        m.final.uniforms.tScene.value = postFX.sceneRT.texture;
+        m.final.uniforms.tBloom.value = postFX.up[0].texture;
+        m.final.uniforms.tRays.value = postFX.raysRT.texture;
+        m.final.uniforms.uExposure.value = renderer.toneMappingExposure;
+        m.final.uniforms.uBloom.value = THREE.MathUtils.lerp(0.050, 0.062, sf) + lightningState.pulse * 0.05;
+        m.final.uniforms.uRays.value = raysStrength;
+        m.final.uniforms.uGrade.value = sf;
+        m.final.uniforms.uVignette.value = THREE.MathUtils.lerp(0.30, 0.52, sf);
+        m.final.uniforms.uTime.value = elapsedTime;
+        runPass(m.final, null);
+
+        renderer.info.render.calls = drawCalls;
+        renderer.info.render.triangles = drawTris;
+      }
+
+      function applyRenderSize() {
+        var maxRatio = Math.min(window.devicePixelRatio || 1, 2);
+        postFX.ratio = Math.min(postFX.ratio, maxRatio);
+        renderer.setPixelRatio(postFX.ratio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        resizePostFX();
+      }
+
+      // Lá cây xuyên sáng: khi nắng chiếu từ phía sau, tán lá rực lên thay vì tối đen.
+      function applyLeafTranslucency(material, strength, tag) {
+        material.onBeforeCompile = function (shader) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <lights_fragment_end>',
+            [
+              '#include <lights_fragment_end>',
+              '#if NUM_DIR_LIGHTS > 0',
+              '  float leafBack = max(0.0, -dot(geometry.normal, directionalLights[0].direction));',
+              '  float leafEye = pow(max(0.0, dot(geometry.viewDir, -directionalLights[0].direction)), 2.0);',
+              '  reflectedLight.directDiffuse += directionalLights[0].color * material.diffuseColor * vec3(1.0, 0.92, 0.42) *',
+              '    leafBack * (0.4 + 0.6 * leafEye) * ' + strength.toFixed(3) + ';',
+              '#endif'
+            ].join('\n')
+          );
+        };
+        material.customProgramCacheKey = function () {
+          return 'leaf-translucent-' + tag;
+        };
+      }
 
       function getHorizonCurveDrop(x, z) {
         var tx = oceanSunUniforms.uTargetXZ.value.x;
@@ -619,10 +1036,12 @@
       }
 
       // Trạng thái điều khiển & tương tác
+      var cameraTilt = { active: false, goal: 0.0 };
       var isPaused = false;
       var isAutoRotate = true;
       var isUserInteracting = false;
       var elapsedTime = 0;
+      var firstFrameShown = false;
 
       // Cấu hình Camera Isometric mặc định
       var FRUSTUM_SIZE = 32;
@@ -765,6 +1184,8 @@
         sunny: {
           key: 'sunny',
           badgeLabel: 'Sunny',
+          viLabel: 'Nắng đẹp',
+          mood: 'Trưa nhiệt đới trong vắt — nước ngọc lam, gió nhẹ và nắng tràn mặt vịnh.',
           bodyCss: '#07223b',
           bgHex: 0x07223b,
           fogHex: 0x07223b,
@@ -804,34 +1225,36 @@
         sunset: {
           key: 'sunset',
           badgeLabel: 'Sunset',
-          bodyCss: '#1b2545',
-          bgHex: 0x1b2545,
-          fogHex: 0x382547,
+          viLabel: 'Hoàng hôn',
+          mood: 'Mặt trời chạm biển — dải nắng vàng cam trải dài, mây tím hồng và đèn lồng vừa thắp.',
+          bodyCss: '#15142f',
+          bgHex: 0x15142f,
+          fogHex: 0x4d2c4c,
           fogNear: 86,
           fogFar: 225,
-          abyssHex: 0x1a284d,
-          oceanTintHex: 0x91c8d5,
-          exposure: 0.94,
-          hemiSkyHex: 0xc58c76,
-          hemiGroundHex: 0x38283f,
-          hemiIntensity: 0.52,
-          ambientHex: 0xb9a0b4,
-          ambientIntensity: 0.18,
-          sunHex: 0xffa15a,
-          sunIntensity: 1.48,
-          sunPos: [-38, 13.0, 28],
-          bounceHex: 0xd78a65,
-          bounceIntensity: 0.14,
-          cloudColorHex: 0xf3b18b,
-          cloudEmissiveHex: 0x8c3b4a,
-          cloudEmissiveIntensity: 0.06,
+          abyssHex: 0x141b3e,
+          oceanTintHex: 0x86a6cc,
+          exposure: 1.04,
+          hemiSkyHex: 0xc88a94,
+          hemiGroundHex: 0x2b2140,
+          hemiIntensity: 0.44,
+          ambientHex: 0x8a78b2,
+          ambientIntensity: 0.13,
+          sunHex: 0xff8c42,
+          sunIntensity: 2.15,
+          sunPos: [-38, 10.5, 28],
+          bounceHex: 0x766ae0,
+          bounceIntensity: 0.27,
+          cloudColorHex: 0xdcb2b8,
+          cloudEmissiveHex: 0x5a2442,
+          cloudEmissiveIntensity: 0.10,
           cloudScale: 1.04,
           cloudSpeed: 0.85,
           glintNearHex: 0xffcf87,
           glintFarHex: 0xff9466,
           glintOpacityMul: 0.8,
-          lanternEmissiveIntensity: 2.2,
-          lanternLightIntensity: 1.45,
+          lanternEmissiveIntensity: 3.2,
+          lanternLightIntensity: 1.9,
           waveAmp: 0.92,
           windStrength: 0.9,
           birdScale: 1.0,
@@ -843,6 +1266,8 @@
         rain: {
           key: 'rain',
           badgeLabel: 'Tropical Rain',
+          viLabel: 'Mưa rào',
+          mood: 'Cơn mưa rào ấm áp — mặt biển xám bạc, tán dừa nghiêng theo gió.',
           bodyCss: '#142e42',
           bgHex: 0x142e42,
           fogHex: 0x1e3c52,
@@ -882,6 +1307,8 @@
         storm: {
           key: 'storm',
           badgeLabel: 'Thunderstorm',
+          viLabel: 'Giông bão',
+          mood: 'Đêm giông — sóng lớn, mây đen cuộn và những tia sét xé ngang trời.',
           bodyCss: '#081729',
           bgHex: 0x081729,
           fogHex: 0x0d2036,
@@ -1216,6 +1643,11 @@
           flatShading: true,
           side: THREE.DoubleSide
         });
+        applyLeafTranslucency(SHARED_MATS.palmLeafLight, 0.62, 'a');
+        applyLeafTranslucency(SHARED_MATS.palmLeafMid, 0.62, 'a');
+        applyLeafTranslucency(SHARED_MATS.palmLeafDark, 0.62, 'a');
+        applyLeafTranslucency(SHARED_MATS.vertexFoliageDouble, 0.5, 'b');
+        applyLeafTranslucency(SHARED_MATS.instancedFoliage, 0.5, 'b');
         SHARED_MATS.cloudWhite = makeFlatMat(0xffffff, 0.9, 0.0, {
           emissive: srgb(0x283e54),
           emissiveIntensity: 0.22
@@ -1245,13 +1677,16 @@
           antialias: true,
           powerPreference: 'high-performance'
         });
+        postFX.ratio = Math.min(window.devicePixelRatio || 1, 2);
+        renderer.setPixelRatio(postFX.ratio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.info.autoReset = false;
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.08;
+        initPostFX();
 
         container.appendChild(renderer.domElement);
 
@@ -1298,9 +1733,11 @@
         sunLight.shadow.camera.bottom = -d;
         sunLight.shadow.camera.near = 6;
         sunLight.shadow.camera.far = 95;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.mapSize.width = 4096;
+        sunLight.shadow.mapSize.height = 4096;
         sunLight.shadow.bias = -0.0004;
+        sunLight.shadow.normalBias = 0.03;
+        sunLight.shadow.radius = 2.2;
 
         scene.add(sunLight);
 
@@ -2367,17 +2804,29 @@
         if (!oceanMatRef) return;
 
         oceanMatRef.onBeforeCompile = function (shader) {
-          shader.uniforms.uTime = oceanSunUniforms.uTime;
-          shader.uniforms.uTargetXZ = oceanSunUniforms.uTargetXZ;
-          shader.uniforms.uCamFwdXZ = oceanSunUniforms.uCamFwdXZ;
-          shader.uniforms.uCamRightXZ = oceanSunUniforms.uCamRightXZ;
-          shader.uniforms.uSunLat = oceanSunUniforms.uSunLat;
-          shader.uniforms.uSunPathStrength = oceanSunUniforms.uSunPathStrength;
-          shader.uniforms.uSunsetFactor = oceanSunUniforms.uSunsetFactor;
-          shader.uniforms.uLightningPulse = oceanSunUniforms.uLightningPulse;
-          shader.uniforms.uSunCoreColor = oceanSunUniforms.uSunCoreColor;
-          shader.uniforms.uSunRoadColor = oceanSunUniforms.uSunRoadColor;
-          shader.uniforms.uWaterRippleStrength = oceanSunUniforms.uWaterRippleStrength;
+          var ou = oceanSunUniforms;
+          var su = skyUniforms;
+          shader.uniforms.uTime = ou.uTime;
+          shader.uniforms.uTargetXZ = ou.uTargetXZ;
+          shader.uniforms.uCamFwdXZ = ou.uCamFwdXZ;
+          shader.uniforms.uCamRightXZ = ou.uCamRightXZ;
+          shader.uniforms.uSunLat = ou.uSunLat;
+          shader.uniforms.uSunPathStrength = ou.uSunPathStrength;
+          shader.uniforms.uLightningPulse = ou.uLightningPulse;
+          shader.uniforms.uSunCoreColor = ou.uSunCoreColor;
+          shader.uniforms.uSunRoadColor = ou.uSunRoadColor;
+          shader.uniforms.uWaterRippleStrength = ou.uWaterRippleStrength;
+          shader.uniforms.uHorizonFwd = ou.uHorizonFwd;
+          shader.uniforms.uWaterGlow = ou.uWaterGlow;
+          shader.uniforms.uChop = ou.uChop;
+          shader.uniforms.uHorizonY = su.uHorizonY;
+          shader.uniforms.uSunPosLocal = su.uSunPosLocal;
+          shader.uniforms.uSunVis = su.uSunVis;
+          shader.uniforms.uSunsetFactor = su.uSunsetFactor;
+          shader.uniforms.uZenithCol = su.uZenithCol;
+          shader.uniforms.uMidSkyCol = su.uMidSkyCol;
+          shader.uniforms.uHorizonCol = su.uHorizonCol;
+          shader.uniforms.uSunAureoleCol = su.uSunAureoleCol;
 
           shader.vertexShader =
             'uniform vec2 uTargetXZ;\nuniform vec2 uCamFwdXZ;\nvarying vec3 vOceanWorldPos;\n' +
@@ -2404,50 +2853,97 @@
               'uniform vec2 uCamRightXZ;',
               'uniform float uSunLat;',
               'uniform float uSunPathStrength;',
-              'uniform float uSunsetFactor;',
               'uniform float uLightningPulse;',
               'uniform vec3 uSunCoreColor;',
               'uniform vec3 uSunRoadColor;',
               'uniform float uWaterRippleStrength;',
-              'varying vec3 vOceanWorldPos;'
+              'uniform float uHorizonFwd;',
+              'uniform float uWaterGlow;',
+              'uniform float uChop;',
+              'varying vec3 vOceanWorldPos;',
+              GLSL_SKY_UNIFORMS,
+              GLSL_NOISE,
+              GLSL_SKY_GRADIENT,
+              'vec2 oceanWaveSlope(vec2 p, vec2 d, float f, float s, float st, float w) {',
+              '  return d * st * cos(dot(p, d) * f - uTime * s + w);',
+              '}',
+              'vec2 noiseSlope(vec2 q) {',
+              '  float e = 0.11;',
+              '  float n0 = vnoise(q);',
+              '  return vec2(vnoise(q + vec2(e, 0.0)) - n0, vnoise(q + vec2(0.0, e)) - n0) / e;',
+              '}'
             ].join('\n') +
             '\n' +
             shader.fragmentShader.replace(
               '#include <tonemapping_fragment>',
               [
-                'float rOrig = length(vOceanWorldPos.xz);',
+                'vec2 wxz = vOceanWorldPos.xz;',
+                'float rOrig = length(wxz);',
                 'gl_FragColor.a = mix(gl_FragColor.a, 1.0, smoothstep(17.5, 24.2, rOrig));',
-                'vec2 relXZ = vOceanWorldPos.xz - uTargetXZ;',
+                'vec2 relXZ = wxz - uTargetXZ;',
                 'float fwd = dot(relXZ, uCamFwdXZ);',
                 'float lat = dot(relXZ, uCamRightXZ);',
-                'vec2 waterXZ = vOceanWorldPos.xz;',
-                'float crossWave = sin(dot(waterXZ, vec2(-0.58, 0.91)) - uTime * 2.65);',
-                'float ripple = sin(dot(waterXZ, vec2(1.65, 1.10)) - uTime * 2.85 + crossWave * 1.15);',
-                'float breakup = sin(dot(waterXZ, vec2(-1.12, 1.48)) + uTime * 1.40 + sin(waterXZ.x * 0.39));',
-                'float softCrest = smoothstep(0.52, 0.98, ripple) * smoothstep(-0.10, 0.72, breakup);',
-                'float waterDetail = (1.0 - smoothstep(32.0, 78.0, rOrig)) * min(1.35, uWaterRippleStrength);',
-                'gl_FragColor.rgb = mix(gl_FragColor.rgb, diffuseColor.rgb, 0.28);',
-                'gl_FragColor.rgb *= 0.86 + (ripple * 0.08 + crossWave * 0.055) * waterDetail;',
-                'vec3 crestTint = gl_FragColor.rgb * vec3(0.90, 1.28, 1.22);',
-                'gl_FragColor.rgb = mix(gl_FragColor.rgb, crestTint, softCrest * waterDetail * 0.72);',
-                'float reflectionFade = smoothstep(3.0, 11.0, fwd) * (1.0 - smoothstep(30.0, 38.5, fwd));',
-                'if (uSunPathStrength > 0.004 && reflectionFade > 0.001) {',
-                '  float horizonProx = smoothstep(4.0, 29.0, fwd);',
-                '  float sway = sin(fwd * 0.32 - uTime * 0.28) * 0.38;',
-                '  float roadWidth = mix(0.9, 2.4, horizonProx) * mix(1.0, 1.3, uSunsetFactor);',
-                '  float roadCoord = (lat - uSunLat + sway) / roadWidth;',
-                '  float roadProfile = exp(-roadCoord * roadCoord * 1.6);',
-                '  float ribbonWave = sin(fwd * 1.9 - uTime * 1.12 + sin(lat * 0.34 + uTime * 0.16) * 0.38);',
-                '  float ribbons = smoothstep(0.55, 0.96, ribbonWave) * smoothstep(0.10, 0.80, breakup);',
-                '  float shoreMask = smoothstep(10.5, 16.0, rOrig);',
-                '  float reflectionMask = uSunPathStrength * reflectionFade * shoreMask;',
-                '  vec3 reflectedLight = mix(uSunRoadColor, uSunCoreColor, ribbons * 0.18) * (0.12 + ribbons * 0.18);',
-                '  float reflectionWeight = clamp(roadProfile * reflectionMask * ribbons * 0.26, 0.0, 0.28);',
-                '  gl_FragColor.rgb = mix(gl_FragColor.rgb, reflectedLight, reflectionWeight);',
+                'float sfO = uSunsetFactor;',
+                'float farness = smoothstep(-16.0, uHorizonFwd, fwd);',
+                'float hp = smoothstep(-10.0, uHorizonFwd, fwd);',
+                'float lod = 1.0 - smoothstep(uHorizonFwd - 13.0, uHorizonFwd - 1.5, fwd);',
+                'float lodMid = 1.0 - 0.7 * smoothstep(uHorizonFwd - 7.0, uHorizonFwd, fwd);',
+
+                // Độ dốc vi mô của mặt nước (đạo hàm giải tích của nhiều lớp sóng + nhiễu)
+                'float warpA = sin(dot(wxz, vec2(0.21, -0.17)) + uTime * 0.31);',
+                'float warpB = sin(dot(wxz, vec2(-0.13, 0.29)) - uTime * 0.23);',
+                'vec2 slope = vec2(0.0);',
+                'slope += oceanWaveSlope(wxz, vec2(0.83, 0.56), 0.62, 1.05, 0.038, warpA * 0.9) * lodMid;',
+                'slope += oceanWaveSlope(wxz, vec2(-0.54, 0.84), 0.95, 1.35, 0.036, warpB * 1.1) * lodMid;',
+                'slope += oceanWaveSlope(wxz, vec2(0.31, -0.95), 1.70, 1.90, 0.036, warpA * 1.3 + 1.7) * lodMid;',
+                'slope += oceanWaveSlope(wxz, vec2(0.96, 0.28), 2.90, 2.50, 0.040, warpB * 1.6 + 0.4) * lod;',
+                'slope += oceanWaveSlope(wxz, vec2(-0.71, -0.70), 4.60, 3.10, 0.044, warpA * 2.0 + 2.9) * lod;',
+                'slope += oceanWaveSlope(wxz, vec2(0.45, 0.89), 7.40, 3.90, 0.044, warpB * 2.3 + 5.1) * lod;',
+                'slope += noiseSlope(wxz * 2.3 + vec2(uTime * 0.33, -uTime * 0.21)) * 0.050 * lod;',
+                'slope += noiseSlope(wxz * 6.1 + vec2(-uTime * 0.52, uTime * 0.44)) * 0.055 * lod;',
+                'slope += noiseSlope(wxz * 14.0 + vec2(uTime * 0.71, uTime * 0.63)) * 0.050 * lod;',
+                'slope *= uChop;',
+                'float sL = dot(slope, uCamRightXZ);',
+                'float sF = dot(slope, uCamFwdXZ);',
+
+                // Thân nước: ánh sáng tiêu chuẩn + sắc nước, gợn sáng tối theo mặt sóng, tán xạ ngọc ở mặt sóng ngược sáng
+                'vec3 waterBase = mix(gl_FragColor.rgb, diffuseColor.rgb * uWaterGlow, 0.28);',
+                'waterBase *= 0.90 + clamp(-sF * 1.7 + sL * 0.5, -0.20, 0.26) * min(1.35, uWaterRippleStrength + 0.35);',
+                'waterBase += diffuseColor.rgb * vec3(0.22, 1.0, 0.86) * max(sF, 0.0) * 1.35 * uSunVis * mix(0.55, 0.30, sfO);',
+
+                // Phản chiếu bầu trời kiểu Fresnel với phối cảnh giả (xa -> sát góc lướt -> phản chiếu chân trời)
+                'float cosT = clamp(mix(0.60, 0.045, farness) + sF * 1.8, 0.02, 1.0);',
+                'float fres = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);',
+                'float yRef = clamp(mix(10.0, 0.25, pow(farness, 0.7)) + sF * 42.0, 0.05, 12.0);',
+                'vec3 skyRefl = skyGradient(lat + sL * 46.0, yRef);',
+                'vec3 oceanCol = mix(waterBase, skyRefl, clamp(fres * mix(0.92, 1.0, sfO), 0.0, 1.0));',
+
+                // Sương khí quyển hòa mặt biển vào chân trời
+                'float hz = smoothstep(uHorizonFwd - 13.0, uHorizonFwd + 0.5, fwd);',
+                'oceanCol = mix(oceanCol, skyGradient(lat, 0.0), hz * hz * 0.60);',
+
+                // Dải nắng: lấp lánh vi mặt (pixel nào có độ dốc khớp góc phản xạ thì bừng sáng) + vệt sáng mềm
+                'if (uSunPathStrength > 0.004) {',
+                '  float pathW = mix(44.0, 15.0, hp);',
+                '  float sway = sin(fwd * 0.21 - uTime * 0.25) * 0.55 * (1.0 - hp);',
+                '  float offL = lat - uSunLat - sway;',
+                '  float tau = mix(0.030, 0.125, smoothstep(uHorizonFwd - 15.0, uHorizonFwd, fwd));',
+                '  float dS = (sL - offL / pathW) / tau;',
+                '  float reqF = mix(0.15, 0.0, hp);',
+                '  float dF = (sF - reqF) / mix(0.085, 0.14, hp);',
+                '  float glint = exp(-dS * dS - dF * dF);',
+                '  float shoreMask = smoothstep(9.2, 13.0, rOrig);',
+                '  float nearFade = mix(0.30, 1.0, smoothstep(-24.0, -4.0, fwd));',
+                '  float pathMask = uSunPathStrength * shoreMask * nearFade;',
+                '  float sheenW = pathW * 0.17;',
+                '  float sheen = exp(-(offL * offL) / (sheenW * sheenW));',
+                '  oceanCol = mix(oceanCol, uSunRoadColor * mix(0.9, 1.5, hp), sheen * pathMask * mix(0.10, 0.50, hp * hp));',
+                '  oceanCol += uSunCoreColor * glint * pathMask * mix(5.5, 9.0, hp);',
                 '}',
                 'if (uLightningPulse > 0.004) {',
-                '  gl_FragColor.rgb += vec3(0.30, 0.48, 0.62) * uLightningPulse * (0.10 + softCrest * 0.12);',
+                '  oceanCol += vec3(0.30, 0.48, 0.62) * uLightningPulse * (0.10 + max(sF, 0.0) * 1.2);',
                 '}',
+                'gl_FragColor.rgb = oceanCol;',
                 '#include <tonemapping_fragment>'
               ].join('\n')
             );
@@ -2457,29 +2953,14 @@
           );
         };
         oceanMatRef.customProgramCacheKey = function () {
-          return 'ocean-short-crossing-waves-v5';
+          return 'ocean-fresnel-glitter-v6';
         };
         oceanMatRef.needsUpdate = true;
       }
 
 
-      // Đĩa mặt trời nhỏ, tán xạ khí quyển mềm và màu trời trong không gian tuyến tính.
+      // Bầu trời thủ tục: dải màu khí quyển, mặt trời HDR có viền tối, quầng sáng, tia nắng, mây tầng bắt sáng, sao sớm.
       function createCelestialSunAndSky() {
-        var skyUniforms = {
-          uHorizonY: { value: 9.83 },
-          uTopY: { value: 16.5 },
-          uSunPosLocal: { value: new THREE.Vector2(-6.2, 12.5) },
-          uSunVis: { value: 1.0 },
-          uSunSize: { value: 1.0 },
-          uSunsetFactor: { value: 0.0 },
-          uLightningPulse: { value: 0.0 },
-          uZenithCol: { value: srgb(0x437fa8) },
-          uMidSkyCol: { value: srgb(0x82b6ce) },
-          uHorizonCol: { value: srgb(0xd4e4e2) },
-          uSunAureoleCol: { value: srgb(0xffe9c6) },
-          uCoreCol: { value: srgb(0xfffbef) },
-          uRimCol: { value: srgb(0xffe4b7) }
-        };
         var skyMat = new THREE.ShaderMaterial({
           uniforms: skyUniforms,
           depthTest: true,
@@ -2496,53 +2977,98 @@
             '}'
           ].join('\n'),
           fragmentShader: [
-            'uniform float uHorizonY;',
-            'uniform float uTopY;',
-            'uniform vec2 uSunPosLocal;',
-            'uniform float uSunVis;',
+            'uniform float uTime;',
             'uniform float uSunSize;',
-            'uniform float uSunsetFactor;',
             'uniform float uLightningPulse;',
-            'uniform vec3 uZenithCol;',
-            'uniform vec3 uMidSkyCol;',
-            'uniform vec3 uHorizonCol;',
-            'uniform vec3 uSunAureoleCol;',
+            'uniform float uSkyScroll;',
+            'uniform float uCloudCover;',
+            'uniform float uOvercast;',
+            'uniform float uStarVis;',
             'uniform vec3 uCoreCol;',
             'uniform vec3 uRimCol;',
             'varying vec2 vLocalXY;',
+            GLSL_SKY_UNIFORMS,
+            GLSL_NOISE,
+            GLSL_SKY_GRADIENT,
             'void main() {',
-            '  float span = max(3.2, uTopY - uHorizonY);',
-            '  float h = clamp((vLocalXY.y - uHorizonY) / span, 0.0, 1.0);',
-            '  vec3 col = mix(uHorizonCol, uMidSkyCol, smoothstep(0.0, 0.58, h));',
-            '  col = mix(col, uZenithCol, smoothstep(0.35, 1.0, h));',
-            '  vec2 delta = vLocalXY - uSunPosLocal;',
-            '  vec2 hazeP = delta / vec2(mix(6.0, 10.0, uSunsetFactor), mix(3.6, 3.0, uSunsetFactor));',
-            '  float haze = exp(-dot(hazeP, hazeP)) * uSunVis;',
-            '  col = mix(col, uSunAureoleCol, haze * mix(0.12, 0.24, uSunsetFactor));',
+            '  float x = vLocalXY.x;',
+            '  float y = vLocalXY.y - uHorizonY;',
+            '  float sf = uSunsetFactor;',
+            '  vec3 col = skyGradient(x, y);',
+            '  vec2 sunP = vec2(uSunPosLocal.x, uSunPosLocal.y - uHorizonY);',
+            '  vec2 delta = vec2(x, y) - sunP;',
             '  float radius = 0.68 * uSunSize;',
+            '  float rl = length(delta);',
+            '  float horizonClip = smoothstep(-0.015, 0.04, y);',
+            '  float vis = uSunVis * horizonClip;',
+
+            // Sao sớm trên đỉnh trời lúc chạng vạng
+            '  if (uStarVis > 0.01) {',
+            '    vec2 sg = vec2(x + uSkyScroll * 0.5, y) * 2.3;',
+            '    vec2 sid = floor(sg);',
+            '    float sh = hash21(sid);',
+            '    vec2 sof = (vec2(hash21(sid + 3.1), hash21(sid + 7.7)) - 0.5) * 0.7;',
+            '    float star = step(0.84, sh) * smoothstep(0.085, 0.0, length(fract(sg) - 0.5 - sof));',
+            '    star *= 0.55 + 0.45 * sin(uTime * 2.3 + sh * 50.0);',
+            '    col += vec3(0.85, 0.90, 1.0) * star * uStarVis * smoothstep(4.5, 9.5, y) * 1.4;',
+            '  }',
+
+            // Quạt tia nắng tỏa ra từ mặt trời
+            '  float ang = atan(delta.y, delta.x);',
+            '  float fan = vnoise(vec2(ang * 6.0, uTime * 0.03)) * vnoise(vec2(ang * 15.0 + 4.0, 1.7 - uTime * 0.02));',
+            '  fan = smoothstep(0.16, 0.60, fan);',
+            '  col += uSunAureoleCol * fan * exp(-rl / (radius * 4.5 + 1.2)) * smoothstep(radius * 0.9, radius * 2.4, rl) * mix(0.10, 0.42, sf) * uSunVis;',
+
+            // Quầng sáng & đĩa mặt trời (dẹt nhẹ và rung nhiệt khi sát chân trời)
             '  vec2 p = delta / radius;',
+            '  p.y *= 1.0 + 0.09 * sf;',
+            '  float lowPart = smoothstep(0.35, -0.95, p.y);',
+            '  p.x += sin(p.y * 24.0 + uTime * 1.6) * 0.012 * sf * lowPart;',
             '  float r = length(p);',
-            '  float horizonClip = smoothstep(uHorizonY - 0.015, uHorizonY + 0.04, vLocalXY.y);',
-            '  float visibility = uSunVis * horizonClip;',
-            '  float edgeGlow = exp(-max(0.0, r - 1.0) * 3.4) * 0.18;',
-            '  float softGlow = exp(-r * r * 0.35) * mix(0.10, 0.065, uSunsetFactor);',
-            '  col += uSunAureoleCol * (edgeGlow + softGlow) * visibility;',
-            '  float aa = max(fwidth(r), 0.006);',
+            '  float corona = exp(-max(0.0, r - 1.0) * 2.8) * 0.50 + exp(-max(0.0, r - 1.0) * 0.75) * 0.20;',
+            '  col += uSunAureoleCol * corona * vis * mix(0.75, 0.55, sf);',
+            '  float aa = max(fwidth(r), 0.004);',
             '  float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, r);',
             '  float mu = sqrt(max(0.0, 1.0 - min(r * r, 1.0)));',
             '  float vertical = smoothstep(-1.0, 1.0, p.y);',
-            '  vec3 discColor = mix(uRimCol, uCoreCol, 0.18 + vertical * 0.82);',
-            '  discColor *= (0.80 + mu * 0.20) * mix(4.0, 1.85, uSunsetFactor);',
-            '  col = mix(col, discColor, disc * visibility);',
-            '  col += vec3(0.20, 0.30, 0.45) * uLightningPulse * (1.0 - h * 0.6);',
+            '  vec3 discColor = mix(uRimCol, uCoreCol, mix(0.18 + vertical * 0.82, vertical * vertical * 0.9, sf));',
+            '  discColor *= (0.72 + mu * 0.28) * mix(9.0, 2.7, sf);',
+            '  discColor *= mix(vec3(1.0), vec3(1.0, 0.50, 0.30), sf * lowPart * 0.85);',
+            '  float strata = smoothstep(0.45, 0.95, sin(p.y * 8.5 + 0.7 + vnoise(vec2(x * 0.35, 2.0)) * 2.2));',
+            '  discColor *= 1.0 - 0.34 * strata * sf * lowPart;',
+            '  col = mix(col, discColor, disc * vis);',
+
+            // Mây tầng & mây ti: bắt sáng theo hướng mặt trời (viền rực, thân tím)
+            '  vec2 cp = vec2(x + uSkyScroll, y);',
+            '  float warp = fbm(cp * vec2(0.035, 0.11) + vec2(uTime * 0.004, 0.0));',
+            '  vec2 c1 = vec2(cp.x * 0.055 + uTime * 0.010, cp.y * 0.40 + warp * 1.6);',
+            '  float n1 = fbm(c1);',
+            '  float n2 = fbm(vec2(cp.x * 0.021 - uTime * 0.006 + 31.0, cp.y * 0.85 + warp * 0.9 + 7.0));',
+            '  float lowMask = smoothstep(mix(0.25, -0.4, uOvercast), mix(2.0, 0.8, uOvercast), y);',
+            '  float sunHole = 1.0 - 0.72 * exp(-rl * rl / (radius * radius * 3.2 + 0.6)) * (1.0 - uOvercast);',
+            '  float d1 = smoothstep(1.0 - uCloudCover, 1.28 - uCloudCover, n1) * lowMask * sunHole;',
+            '  float d2 = smoothstep(0.50, 0.80, n2) * smoothstep(2.2, 6.0, y) * 0.55 * (1.0 - uOvercast);',
+            '  vec2 toSun = normalize(sunP - vec2(x, y) + vec2(0.0001));',
+            '  float n1s = fbm(c1 + toSun * vec2(0.055, 0.40) * 0.85);',
+            '  float lit = clamp((n1 - n1s) * 5.5 + 0.42, 0.0, 1.0);',
+            '  float sunNear = exp(-dot(delta, delta) / mix(220.0, 520.0, sf));',
+            '  vec3 litCol = mix(vec3(1.0), mix(vec3(1.0, 0.48, 0.42), vec3(1.75, 0.74, 0.28), sunNear), sf);',
+            '  vec3 shadeCol = mix(vec3(0.60, 0.69, 0.80), mix(vec3(0.27, 0.19, 0.37), vec3(0.46, 0.21, 0.27), sunNear), sf);',
+            '  litCol = mix(litCol, uHorizonCol * 1.05, uOvercast);',
+            '  shadeCol = mix(shadeCol, uMidSkyCol * 0.55, uOvercast);',
+            '  col = mix(col, mix(shadeCol, litCol, lit), d1 * 0.93);',
+            '  vec3 cirCol = mix(vec3(1.0), mix(vec3(1.0, 0.55, 0.56), vec3(1.5, 0.76, 0.40), sunNear), sf);',
+            '  col = mix(col, cirCol, d2 * (1.0 - d1));',
+
+            '  col += vec3(0.20, 0.30, 0.45) * uLightningPulse * (1.0 - clamp(y / 11.0, 0.0, 1.0) * 0.6);',
             '  gl_FragColor = vec4(col, 1.0);',
             '  #include <tonemapping_fragment>',
             '  #include <encodings_fragment>',
             '}'
           ].join('\n')
         });
-        var skyGeo = new THREE.PlaneGeometry(260, 32);
-        skyGeo.translate(0, 14.0, 0);
+        var skyGeo = new THREE.PlaneGeometry(260, 36);
+        skyGeo.translate(0, 16.0, 0);
         var skyPlane = new THREE.Mesh(skyGeo, skyMat);
         skyPlane.frustumCulled = false;
         skyPlane.renderOrder = -5;
@@ -2564,18 +3090,18 @@
       var tmpSkyOrigin = new THREE.Vector3();
       var tmpSunWorld = new THREE.Vector3();
 
-      var C_SKY_ZEN_SUNSET = srgb(0x51435f);
+      var C_SKY_ZEN_SUNSET = srgb(0x1c2250);
       var C_SKY_ZEN_RAIN = srgb(0x364b5c);
       var C_SKY_ZEN_STORM = srgb(0x162333);
-      var C_SKY_MID_SUNSET = srgb(0xc77764);
+      var C_SKY_MID_SUNSET = srgb(0xc25a74);
       var C_SKY_MID_RAIN = srgb(0x6d8290);
       var C_SKY_MID_STORM = srgb(0x2e4253);
-      var C_SKY_HOR_SUNSET = srgb(0xffad63);
+      var C_SKY_HOR_SUNSET = srgb(0xff9a4c);
       var C_SKY_HOR_RAIN = srgb(0x9eafb5);
       var C_SKY_HOR_STORM = srgb(0x4e6270);
-      var C_SUN_AUR_SUNSET = srgb(0xf5a65e);
-      var C_SUN_CORE_SUNSET = srgb(0xffc66b);
-      var C_SUN_RIM_SUNSET = srgb(0xf27635);
+      var C_SUN_AUR_SUNSET = srgb(0xff8436);
+      var C_SUN_CORE_SUNSET = srgb(0xffd27a);
+      var C_SUN_RIM_SUNSET = srgb(0xff5a1e);
 
       function updateCelestialSunAndSky(t, delta) {
         if (!camera || !controls || !celestialSunState.skyBackdrop) return;
@@ -2590,8 +3116,8 @@
         if (activeWeatherKey === 'sunset') {
           tgtVis = 1.0;
           tgtSunset = 1.0;
-          tgtSize = 3.45;
-          tgtElev = 1.65;
+          tgtSize = 3.25;
+          tgtElev = 1.5;
         } else if (activeWeatherKey === 'rain') {
           tgtVis = 0.06;
           tgtSunset = 0.12;
@@ -2636,6 +3162,7 @@
           (sinE * tanE) / (4.0 * HORIZON_CURVE_K) -
           controls.target.y * cosE;
         celestialSunState.horizonYCam = yCamPeak;
+        oceanSunUniforms.uHorizonFwd.value = HORIZON_START_DIST + tanE / (2.0 * HORIZON_CURVE_K);
 
         var effTopY = camera.top / Math.max(0.45, camera.zoom);
         var effRightX = camera.right / Math.max(0.45, camera.zoom);
@@ -2643,6 +3170,13 @@
         // Parallax tự nhiên theo góc xoay camera nhưng luôn giữ mặt trời trong khung trời mở phía trên đảo
         var camAzimuth = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x);
         var desiredLat = -6.2 + Math.sin(camAzimuth - Math.PI * 0.25) * 4.4;
+        if (celestialSunState.lastAzimuth !== null) {
+          var dAz = camAzimuth - celestialSunState.lastAzimuth;
+          if (dAz > Math.PI) dAz -= Math.PI * 2;
+          else if (dAz < -Math.PI) dAz += Math.PI * 2;
+          celestialSunState.skyScroll += dAz * 26.0;
+        }
+        celestialSunState.lastAzimuth = camAzimuth;
         var maxSafeLat = Math.max(3.5, effRightX - 5.2);
         var sunLat = THREE.MathUtils.clamp(desiredLat, -maxSafeLat, maxSafeLat);
         celestialSunState.sunLat = sunLat;
@@ -2687,16 +3221,25 @@
             fwdZ * 30.0 + rightZ * sunLat * 1.8
           );
         }
+        // Lúc hoàng hôn, ánh tím lạnh của bầu trời phía đông hắt vào mặt khuất nắng (phía camera)
+        if (sceneLights.bounce) {
+          var sfB = celestialSunState.sunsetFactor;
+          sceneLights.bounce.position.set(
+            THREE.MathUtils.lerp(26, -fwdX * 26.0 + rightX * 12.0, sfB),
+            THREE.MathUtils.lerp(12, 16, sfB),
+            THREE.MathUtils.lerp(-24, -fwdZ * 26.0 + rightZ * 12.0, sfB)
+          );
+        }
 
         // Pha màu bầu trời & mặt trời mượt mà giữa Nắng đẹp -> Hoàng hôn -> Mưa rào -> Giông bão
         var sf = celestialSunState.sunsetFactor;
         var rf = celestialSunState.rainFactor;
         var stf = celestialSunState.stormFactor;
 
-        tmpSkyZenith.setHex(0x437fa8).convertSRGBToLinear().lerp(C_SKY_ZEN_SUNSET, sf).lerp(C_SKY_ZEN_RAIN, rf).lerp(C_SKY_ZEN_STORM, stf);
-        tmpSkyMid.setHex(0x82b6ce).convertSRGBToLinear().lerp(C_SKY_MID_SUNSET, sf).lerp(C_SKY_MID_RAIN, rf).lerp(C_SKY_MID_STORM, stf);
-        tmpSkyHorizon.setHex(0xd4e4e2).convertSRGBToLinear().lerp(C_SKY_HOR_SUNSET, sf).lerp(C_SKY_HOR_RAIN, rf).lerp(C_SKY_HOR_STORM, stf);
-        tmpSunAureole.setHex(0xffe9c6).convertSRGBToLinear().lerp(C_SUN_AUR_SUNSET, sf * 0.85);
+        tmpSkyZenith.setHex(0x2f78b8).convertSRGBToLinear().lerp(C_SKY_ZEN_SUNSET, sf).lerp(C_SKY_ZEN_RAIN, rf).lerp(C_SKY_ZEN_STORM, stf);
+        tmpSkyMid.setHex(0x7fb8dc).convertSRGBToLinear().lerp(C_SKY_MID_SUNSET, sf).lerp(C_SKY_MID_RAIN, rf).lerp(C_SKY_MID_STORM, stf);
+        tmpSkyHorizon.setHex(0xd6ebee).convertSRGBToLinear().lerp(C_SKY_HOR_SUNSET, sf).lerp(C_SKY_HOR_RAIN, rf).lerp(C_SKY_HOR_STORM, stf);
+        tmpSunAureole.setHex(0xffe9c6).convertSRGBToLinear().lerp(C_SUN_AUR_SUNSET, sf);
         tmpSunCore.setHex(0xfffbef).convertSRGBToLinear().lerp(C_SUN_CORE_SUNSET, sf);
         tmpSunRim.setHex(0xffe4b7).convertSRGBToLinear().lerp(C_SUN_RIM_SUNSET, sf);
 
@@ -2708,6 +3251,11 @@
         skyU.uSunSize.value = celestialSunState.sunSize;
         skyU.uSunsetFactor.value = sf;
         skyU.uLightningPulse.value = lightningState.pulse;
+        skyU.uTime.value = t;
+        skyU.uSkyScroll.value = celestialSunState.skyScroll;
+        skyU.uCloudCover.value = 0.44 + 0.07 * sf + 0.42 * rf + 0.54 * stf;
+        skyU.uOvercast.value = Math.min(1.0, Math.max(rf * 0.85, stf));
+        skyU.uStarVis.value = sf * (1.0 - rf) * (1.0 - stf);
         skyU.uZenithCol.value.copy(tmpSkyZenith);
         skyU.uMidSkyCol.value.copy(tmpSkyMid);
         skyU.uHorizonCol.value.copy(tmpSkyHorizon);
@@ -2718,25 +3266,29 @@
 
       }
 
+      var C_ROAD_CORE_DAY = srgb(0xfff4dc);
+      var C_ROAD_CORE_SUNSET = srgb(0xffbe6e);
+      var C_ROAD_DAY = srgb(0xfff0cf);
+      var C_ROAD_SUNSET = srgb(0xff7a2c);
+
       function updateOceanSunPath(t) {
         var sf = celestialSunState.sunsetFactor;
-        var vis = celestialSunState.skyMat ? celestialSunState.skyMat.uniforms.uSunVis.value : 0.0;
-        var pathStrength = vis * THREE.MathUtils.lerp(0.72, 1.08, sf);
+        var vis = skyUniforms.uSunVis.value;
+        var pathStrength = vis * THREE.MathUtils.lerp(0.55, 1.0, sf);
 
         oceanSunUniforms.uTime.value = t;
         oceanSunUniforms.uSunLat.value = celestialSunState.sunLat;
         oceanSunUniforms.uSunPathStrength.value = pathStrength;
         oceanSunUniforms.uSunsetFactor.value = sf;
         oceanSunUniforms.uLightningPulse.value = lightningState.pulse;
-
-        tmpSunCore.copy(srgb(0xffe5b0)).lerp(srgb(0xffcf79), sf);
-        tmpSunRoad.copy(srgb(0xe6c793)).lerp(srgb(0xff8b38), sf);
-
-        oceanSunUniforms.uSunCoreColor.value.copy(tmpSunCore);
-        oceanSunUniforms.uSunRoadColor.value.copy(tmpSunRoad);
+        oceanSunUniforms.uSunCoreColor.value.copy(C_ROAD_CORE_DAY).lerp(C_ROAD_CORE_SUNSET, sf);
+        oceanSunUniforms.uSunRoadColor.value.copy(C_ROAD_DAY).lerp(C_ROAD_SUNSET, sf);
+        oceanSunUniforms.uWaterGlow.value =
+          1.0 - 0.58 * sf - 0.30 * celestialSunState.rainFactor - 0.50 * celestialSunState.stormFactor;
 
         if (weatherCurrent) {
           oceanSunUniforms.uWaterRippleStrength.value = weatherCurrent.glintOpacityMul;
+          oceanSunUniforms.uChop.value = 0.72 + 0.28 * weatherCurrent.waveAmp;
         }
       }
 
@@ -4825,6 +5377,7 @@
         var preset = WEATHER_PRESETS[weatherKey];
         if (!preset) return;
 
+        var prevWeatherKey = activeWeatherKey;
         activeWeatherKey = weatherKey;
         weatherTarget = buildWeatherState(preset);
 
@@ -4838,10 +5391,19 @@
 
         var badge = document.getElementById('hud-weather-badge');
         if (badge) {
-          badge.textContent = 'Isometric 3D Diorama \u00b7 ' + preset.badgeLabel;
+          badge.textContent = preset.viLabel;
         }
 
+        var moodEl = document.getElementById('hud-mood');
+        if (moodEl) moodEl.textContent = preset.mood;
+        document.body.setAttribute('data-weather', weatherKey);
         document.body.style.backgroundColor = preset.bodyCss;
+
+        // Hoàng hôn: hạ nhẹ góc máy để mở rộng bầu trời; các chế độ khác trở về góc mặc định
+        if (weatherKey === 'sunset' || prevWeatherKey === 'sunset') {
+          cameraTilt.goal = THREE.MathUtils.degToRad(weatherKey === 'sunset' ? 20.5 : 28.4);
+          cameraTilt.active = weatherKey !== prevWeatherKey;
+        }
 
         if (preset.lightning) {
           lightningState.nextTimer = 0.65;
@@ -5889,6 +6451,7 @@
 
         controls.addEventListener('start', function () {
           isUserInteracting = true;
+          cameraTilt.active = false;
         });
         controls.addEventListener('end', function () {
           isUserInteracting = false;
@@ -5909,18 +6472,25 @@
           isAutoRotate = !isAutoRotate;
           btnAutoRotate.classList.toggle('active', isAutoRotate);
           document.getElementById('label-autorotate').textContent =
-            'Auto Rotate: ' + (isAutoRotate ? 'ON' : 'OFF');
+            'Tự xoay: ' + (isAutoRotate ? 'Bật' : 'Tắt');
         });
 
         btnPause.addEventListener('click', function () {
           isPaused = !isPaused;
           btnPause.classList.toggle('paused', isPaused);
-          document.getElementById('label-pause').textContent = isPaused ? 'Resume' : 'Pause';
+          document.getElementById('label-pause').textContent = isPaused ? 'Tiếp tục' : 'Tạm dừng';
         });
 
         btnClosePoi.addEventListener('click', function () {
           hidePoiCard();
         });
+
+        var btnCinema = document.getElementById('btn-cinema');
+        function toggleCinema() {
+          var hidden = document.body.classList.toggle('ui-hidden');
+          btnCinema.classList.toggle('active', hidden);
+        }
+        btnCinema.addEventListener('click', toggleCinema);
 
         var weatherButtons = document.querySelectorAll('.weather-btn[data-weather]');
         for (var w = 0; w < weatherButtons.length; w++) {
@@ -5940,6 +6510,7 @@
           else if (event.key === '2') setWeather('sunset');
           else if (event.key === '3') setWeather('rain');
           else if (event.key === '4') setWeather('storm');
+          else if (event.key === 'h' || event.key === 'H') toggleCinema();
         });
 
         var dom = renderer.domElement;
@@ -5955,6 +6526,7 @@
         camera.updateProjectionMatrix();
         controls.target.copy(DEFAULT_TARGET);
         controls.update();
+        cameraTilt.active = activeWeatherKey === 'sunset';
         hidePoiCard();
       }
 
@@ -6092,8 +6664,9 @@
         camera.bottom = -halfH;
         camera.updateProjectionMatrix();
 
-        renderer.setSize(width, height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        postFX.ratio = Math.min(window.devicePixelRatio || 1, 2);
+        postFX.lowFpsCount = 0;
+        applyRenderSize();
       }
 
       // ==========================================
@@ -6116,6 +6689,17 @@
             }
             if (fpsTracker.el) {
               fpsTracker.el.textContent = Math.min(60, Math.max(1, Math.round(fpsTracker.smoothFps))) + ' FPS';
+            }
+            // Tự hạ độ phân giải nội bộ nếu máy không giữ nổi khung hình mượt
+            if (elapsedTime > 5.0 && fpsTracker.smoothFps < 26 && postFX.ratio > 1.0) {
+              postFX.lowFpsCount++;
+              if (postFX.lowFpsCount >= 5) {
+                postFX.ratio = Math.max(1.0, postFX.ratio - 0.25);
+                postFX.lowFpsCount = 0;
+                applyRenderSize();
+              }
+            } else {
+              postFX.lowFpsCount = 0;
             }
             fpsTracker.frames = 0;
             fpsTracker.accum = 0;
@@ -6150,6 +6734,24 @@
 
         updateWeatherTransition(delta);
 
+        if (cameraTilt.active && !isUserInteracting) {
+          var tiltOff = camera.position.clone().sub(controls.target);
+          var tiltHoriz = Math.sqrt(tiltOff.x * tiltOff.x + tiltOff.z * tiltOff.z);
+          var tiltDist = tiltOff.length();
+          var tiltElev = Math.atan2(tiltOff.y, tiltHoriz);
+          var tiltNext = tiltElev + (cameraTilt.goal - tiltElev) * (1.0 - Math.exp(-delta * 1.5));
+          if (Math.abs(cameraTilt.goal - tiltNext) < 0.0015) {
+            tiltNext = cameraTilt.goal;
+            cameraTilt.active = false;
+          }
+          var tiltScale = (Math.cos(tiltNext) * tiltDist) / Math.max(0.001, tiltHoriz);
+          camera.position.set(
+            controls.target.x + tiltOff.x * tiltScale,
+            controls.target.y + Math.sin(tiltNext) * tiltDist,
+            controls.target.z + tiltOff.z * tiltScale
+          );
+        }
+
         controls.target.x = THREE.MathUtils.clamp(controls.target.x, -PAN_LIMIT, PAN_LIMIT);
         controls.target.y = THREE.MathUtils.clamp(controls.target.y, -1.5, 4.5);
         controls.target.z = THREE.MathUtils.clamp(controls.target.z, -PAN_LIMIT, PAN_LIMIT);
@@ -6157,7 +6759,12 @@
         controls.update();
         updateCelestialSunAndSky(elapsedTime, delta);
         updateOceanSunPath(elapsedTime);
-        renderer.render(scene, camera);
+        renderer.info.reset();
+        renderFrame();
+        if (!firstFrameShown) {
+          firstFrameShown = true;
+          document.body.classList.add('ready');
+        }
       }
 
       function updateWeatherTransition(delta) {
@@ -6210,6 +6817,7 @@
         var pulse = lightningState.pulse;
 
         scene.background.copy(cur.bgColor);
+        if (postFX.enabled) scene.background.convertSRGBToLinear();
         scene.fog.color.copy(cur.fogColor);
         if (pulse > 0.001) {
           scene.background.lerp(lightningFlashColor, pulse * 0.5);
@@ -6634,6 +7242,7 @@
         var msgEl = document.getElementById('error-message');
         if (msgEl && message) msgEl.textContent = message;
         if (overlay) overlay.style.display = 'flex';
+        document.body.classList.add('ready');
       }
 
       function checkWebGLAvailable() {
@@ -6667,6 +7276,7 @@
           createVegetation();
           createDecorations();
           setupControls();
+          document.body.setAttribute('data-weather', activeWeatherKey);
           animate();
           window.__dioramaDebug = {
             getStats: function () {

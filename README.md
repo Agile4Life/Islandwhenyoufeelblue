@@ -10,6 +10,10 @@ Single-file interactive 3D Isometric Tropical Island Diorama built with **Three.
   - **3 Moving Boats:** Outrigger Catamaran sailboat, Island Sloop sailboat, and a Lagoon Outrigger Canoe with an animated rower and V-shaped wake foam trails.
   - **6 Articulated Island Visitors & Water Sports:** Beach strollers, coastal jogger, stepping-stone trail hiker up to the Bamboo Tiki Overlook, Stand-Up Paddleboarder (SUP), and lagoon swimmer.
   - **Rich Ecosystem:** Multi-tier lotus waterfall, coral reef & 42 swimming reef fish, beach crabs, swaying coconut palms, hammock, driftwood campfire, wooden jetty, rowboat, seagulls, and drifting clouds.
+- **Cinematic HDR Rendering:** 4x MSAA half-float pipeline with multi-level bloom, screen-space sun shafts, ACES tone mapping, sunset colour grading and dithering (falls back to direct rendering without WebGL2).
+- **Procedural Sky & Sunset:** Atmospheric gradient, HDR sun disc with limb darkening and horizon flattening, crepuscular ray fan, sun-lit layered clouds, early stars; the camera eases lower at sunset to open up the sky.
+- **Fresnel Ocean:** Per-pixel wave slopes, sky reflection that matches the sky shader, micro-facet sun glitter path, backlit wave scattering and horizon haze.
+- **Redesigned HUD:** Glass weather dock, icon controls, cinematic mode (`H`), Vietnamese labels.
 - **60 FPS GPU-Optimized Architecture:** Merged static buffer geometries, `InstancedMesh` batching (`<= 200` draw calls), and fast algebraic GLSL shaders.
 
 ## Run Locally
